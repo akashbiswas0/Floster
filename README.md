@@ -64,4 +64,126 @@ This project uses **Chainlink CRE** (Chainlink Runtime Environment) as the core 
 | [`src/ui-react/lib/irHelpers.ts`](./src/ui-react/lib/irHelpers.ts) | Converts between canvas node state and CRE IR, serialises/deserialises `erc20Transfer` fields for the workflow JSON |
 | [`src/ui-react/lib/api.ts`](./src/ui-react/lib/api.ts) | Frontend API client : extracts the `receiverContract` from `erc20Transfer` actions in the IR and passes it as the broadcast config when calling the simulation endpoint |
 
+---
 
+## Running the Application
+
+### Prerequisites
+
+- **Node.js** v18 or later
+- **[cre CLI](https://docs.chain.link/chainlink-automation/reference/automation-contracts)** — required for workflow simulation (`cre workflow simulate`)
+- **[Foundry](https://getfoundry.sh)** (`forge`) — required only for running smart contract tests
+
+### 1. Install dependencies
+
+```bash
+npm install
+```
+
+### 2. Configure environment variables
+
+Create a `.env` file in the project root:
+
+```bash
+# Required for AI workflow generation
+OPENROUTER_API_KEY=your_openrouter_api_key
+
+# Required for workflows that include an ERC20 Transfer action
+CRE_ETH_PRIVATE_KEY=your_eth_private_key
+
+# Optional — defaults to 4173
+PORT=4173
+```
+
+### 3. Start the development server
+
+```bash
+npm run dev
+```
+
+This starts the Express + Vite dev server with hot module replacement. Open [http://localhost:4173](http://localhost:4173) in your browser.
+
+### 4. Production build & start
+
+```bash
+npm run build:ui   # compile the React frontend with Vite
+npm run build      # compile the server TypeScript
+npm run start      # run the compiled server from dist/
+```
+
+### Running tests
+
+```bash
+# Unit & integration tests (Vitest)
+npm test
+
+# Watch mode
+npm run test:watch
+
+# Solidity contract tests (requires forge)
+npm run test:contracts
+```
+
+---
+
+## Running the Demo APIs
+
+The `demo-apis/` folder contains two lightweight Express servers you can run locally to feed live data into your workflows during testing.
+
+### Attendance API (`demo-apis/attendance-api`)
+
+Returns a list of employees with randomised attendance percentages and calculated salaries. Useful for testing payroll/ERC20 payout workflows.
+
+**Default port:** `3000`  
+**Endpoint:** `GET /api/employees`
+
+```bash
+cd demo-apis/attendance-api
+npm install
+npm start          # node index.js  — or —
+npm run dev        # nodemon (auto-restart on file changes)
+```
+
+Example response:
+
+```json
+[
+  {
+    "id": "E001",
+    "name": "Alice Johnson",
+    "wallet": "0xf3D8a5912f381Da9949fc0c8393734F173A96B72",
+    "attendancePercentage": 87.45,
+    "totalMonthlySalary": 1224.3
+  }
+]
+```
+
+### Random Number API (`demo-apis/backend`)
+
+Returns a single random decimal number between `0.000001` and `0.009999`. Useful for testing workflows that consume a numeric data feed.
+
+**Default port:** `3002`  
+**Endpoint:** `GET /random`
+
+```bash
+cd demo-apis/backend
+npm install
+npm start
+```
+
+Example response:
+
+```json
+{ "number": 0.004731 }
+```
+
+### Running both APIs at the same time
+
+Open two terminal tabs and start each server independently as shown above, or use a tool like `concurrently` (already a dev dependency in the root):
+
+```bash
+# From the project root
+npx concurrently \
+  "cd demo-apis/attendance-api && node index.js" \
+  "cd demo-apis/backend && node index.js"
+```

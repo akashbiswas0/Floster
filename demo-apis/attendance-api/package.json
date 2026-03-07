@@ -1,0 +1,13 @@
+{
+  "name": "employee-attendance-salary-api",
+  "version": "1.0.0",
+  "description": "REST API for employee attendance and salary calculation",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "npx nodemon index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
