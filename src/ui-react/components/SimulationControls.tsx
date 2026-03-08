@@ -17,33 +17,19 @@ const IconSparkle = () => (
 )
 
 interface Props {
-  onValidate: () => void
-  onCompile: () => void
   onRepair: () => void
 }
 
-export default function SimulationControls({ onValidate, onCompile, onRepair }: Props) {
+export default function SimulationControls({ onRepair }: Props) {
   return (
     <section className="px-3 pt-2 pb-4 border-t border-[rgba(255,255,255,0.06)]">
       <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-text-muted mb-2 px-1">Actions</p>
       <div className="flex flex-col gap-1.5">
         <button
-          onClick={onValidate}
-          className="flex items-center gap-2 w-full bg-transparent border border-[rgba(255,181,71,0.25)] text-warning font-mono text-[11px] px-[10px] py-[7px] cursor-pointer transition-all duration-150 text-left hover:bg-[rgba(255,181,71,0.07)]"
-        >
-          <IconCheck /> Validate + Preflight
-        </button>
-        <button
-          onClick={onCompile}
-          className="flex items-center gap-2 w-full bg-transparent border border-[rgba(255,255,255,0.08)] text-text-secondary font-mono text-[11px] px-[10px] py-[7px] cursor-pointer transition-all duration-150 text-left hover:bg-[rgba(255,255,255,0.04)]"
-        >
-          <IconFile /> Generate Files
-        </button>
-        <button
           onClick={onRepair}
           className="flex items-center gap-2 w-full bg-transparent border border-[rgba(124,106,255,0.25)] text-purple font-mono text-[11px] px-[10px] py-[7px] cursor-pointer transition-all duration-150 text-left hover:bg-[rgba(124,106,255,0.07)]"
         >
-          <IconSparkle /> AI Repair IR
+          <IconSparkle /> AI Repair Workflow
         </button>
       </div>
     </section>

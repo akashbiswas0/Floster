@@ -4,10 +4,11 @@ interface Props {
   irJson: string
   output: string
   isSimulating: boolean
+  simulationTarget: string
   onIRJsonChange: (v: string) => void
 }
 
-export default function BottomPanels({ irJson, output, isSimulating, onIRJsonChange }: Props) {
+export default function BottomPanels({ irJson, output, isSimulating, simulationTarget, onIRJsonChange }: Props) {
   const [height, setHeight] = useState(220)
   const [irWidth, setIrWidth] = useState<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -65,18 +66,18 @@ export default function BottomPanels({ irJson, output, isSimulating, onIRJsonCha
       {/* Bottom panels row */}
       <div
         ref={containerRef}
-        className="flex-shrink-0 flex"
+        className="flex-shrink-0 flex border-b border-[rgba(255,255,255,0.06)]"
         style={{ height }}
       >
         {/* IR JSON panel */}
         <div
           ref={irPanelRef}
-          className="flex flex-col bg-panel overflow-hidden"
+          className="flex flex-col bg-panel overflow-hidden border-b border-[rgba(255,255,255,0.12)]"
           style={irWidth !== null ? { width: irWidth, flex: 'none' } : { width: '50%', minWidth: 150 }}
         >
           <div className={panelHeaderCls}>
             <div className="flex items-center gap-2">
-              <span className="font-ui text-[12px] font-semibold text-text-primary">Workflow IR JSON</span>
+              <span className="font-ui text-[12px] font-semibold text-text-primary">Workflow JSON</span>
               <span className="font-mono text-[8px] uppercase tracking-widest text-purple border border-[rgba(124,106,255,0.3)] bg-[rgba(124,106,255,0.08)] px-1.5 py-0.5">
                 IR v1.0
               </span>
@@ -101,12 +102,12 @@ export default function BottomPanels({ irJson, output, isSimulating, onIRJsonCha
         <div onMouseDown={handleVMouseDown} className={resizeVCls} />
 
         {/* Output panel */}
-        <div className="flex-1 flex flex-col bg-panel overflow-hidden" style={{ minWidth: 150 }}>
+        <div className="flex-1 flex flex-col bg-panel overflow-hidden border-b border-[rgba(255,255,255,0.12)]" style={{ minWidth: 150 }}>
           <div className={panelHeaderCls}>
             <div className="flex items-center gap-2">
               <span className="font-ui text-[12px] font-semibold text-text-primary">Output</span>
               <span className="font-mono text-[8px] uppercase tracking-widest text-success border border-[rgba(0,229,160,0.3)] bg-[rgba(0,229,160,0.08)] px-1.5 py-0.5">
-                SIMULATION
+                {simulationTarget === 'local-simulation' ? 'SIMULATION' : 'RUNNING ON TESTNET'}
               </span>
             </div>
             <button
@@ -122,7 +123,7 @@ export default function BottomPanels({ irJson, output, isSimulating, onIRJsonCha
                 <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
                   strokeLinecap="round" style={{ color: 'var(--color-success, #00e5a0)' }} />
               </svg>
-              <span className="font-mono text-[10px] text-text-muted uppercase tracking-widest">Simulating…</span>
+              <span className="font-mono text-[10px] text-text-muted uppercase tracking-widest">Running Workflow</span>
             </div>
           ) : (
             <pre

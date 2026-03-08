@@ -40,7 +40,7 @@ export default function CanvasToolbar({ simulationTarget, modeLabel, modeDotColo
           className="flex items-center gap-1.5 bg-transparent border border-[rgba(0,229,160,0.3)] text-success font-mono text-[11px] px-3 py-1 cursor-pointer transition-all duration-150 hover:bg-[rgba(0,229,160,0.08)] hover:border-[rgba(0,229,160,0.5)]"
         >
           <IconPlay />
-          Simulate
+          {simulationTarget === 'local-simulation' ? 'Simulate' : 'Run On Testnet'}
         </button>
       </div>
     </div>
