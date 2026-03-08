@@ -29,6 +29,53 @@ describe('IR validation + lint + preflight', () => {
     expect(result.valid).toBe(true)
   })
 
+  it('flags stale erc20Transfer amountPath output references', () => {
+    const ir = structuredClone(validIRFixture)
+    ir.actions.push({
+      id: 'action_transfer_1',
+      name: 'ERC20 Transfer',
+      type: 'erc20Transfer',
+      chainName: 'ethereum-testnet-sepolia',
+      tokenAddress: '0x0000000000000000000000000000000000000001',
+      receiverContract: '0x1729388a37eDC095c17C381fbe43Fb7EbeC44499',
+      recipientAddress: '0x0000000000000000000000000000000000000003',
+      tokenDecimals: 18,
+      amountPath: '$outputs.action_http_1.body.number',
+      gasLimit: 500000,
+    })
+    ir.edges.push({ from: 'action_1', to: 'action_transfer_1' })
+
+    const diagnostics = runDeterminismLint(ir)
+    expect(diagnostics.some((d) => d.code === 'REF_OUTPUT_ACTION_NOT_FOUND')).toBe(true)
+  })
+
+  it('flags stale $outputs references in non-erc20 fields', () => {
+    const ir = structuredClone(validIRFixture)
+    const transform = ir.actions.find((action) => action.type === 'transform')
+    if (!transform || transform.type !== 'transform') throw new Error('missing transform')
+    transform.template.body = '$outputs.action_http_1.body'
+
+    const diagnostics = runDeterminismLint(ir)
+    expect(diagnostics.some((d) => d.code === 'REF_OUTPUT_ACTION_NOT_FOUND')).toBe(true)
+  })
+
+  it('accepts valid $outputs references across action fields', () => {
+    const ir = structuredClone(validIRFixture)
+    ir.actions.push({
+      id: 'action_write_1',
+      name: 'EVM Write',
+      type: 'evmWrite',
+      chainName: 'ethereum-testnet-sepolia',
+      receiver: '0x0000000000000000000000000000000000000002',
+      payloadPath: '$outputs.action_1.body',
+      gasLimit: 300000,
+    })
+    ir.edges.push({ from: 'action_1', to: 'action_write_1' })
+
+    const diagnostics = runDeterminismLint(ir)
+    expect(diagnostics.some((d) => d.code === 'REF_OUTPUT_ACTION_NOT_FOUND')).toBe(false)
+  })
+
   it('rejects erc20Transfer with invalid recipient address', () => {
     const ir = structuredClone(validIRFixture)
     ir.actions.push({

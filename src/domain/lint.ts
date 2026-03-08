@@ -17,6 +17,7 @@ const CRE_QUOTAS = {
 } as const
 
 const DISALLOWED_PATTERNS = [/\bDate\.now\s*\(/, /\bnew\s+Date\s*\(/]
+const OUTPUT_REF_PREFIX = '$outputs.'
 
 function lintTransformDeterminism(action: TransformActionNode): Diagnostic[] {
   const diagnostics: Diagnostic[] = []
@@ -77,6 +78,64 @@ function lintResultOrder(ir: WorkflowIR): Diagnostic[] {
   return diagnostics
 }
 
+function extractOutputActionId(ref: string): string | null {
+  const normalized = ref.trim()
+  if (!normalized.startsWith(OUTPUT_REF_PREFIX)) return null
+
+  const remainder = normalized.slice(OUTPUT_REF_PREFIX.length).trim()
+  if (!remainder) return ''
+
+  const dotIndex = remainder.indexOf('.')
+  return (dotIndex === -1 ? remainder : remainder.slice(0, dotIndex)).trim()
+}
+
+function lintOutputReferences(ir: WorkflowIR): Diagnostic[] {
+  const diagnostics: Diagnostic[] = []
+  const actionIdSet = new Set(ir.actions.map((action) => action.id))
+
+  const pushMissingOutputRef = (ownerActionId: string, fieldPath: string, fieldName: string, ref: string): void => {
+    const referencedActionId = extractOutputActionId(ref)
+    if (referencedActionId === null) return
+    if (referencedActionId && actionIdSet.has(referencedActionId)) return
+
+    diagnostics.push({
+      severity: 'error',
+      code: 'REF_OUTPUT_ACTION_NOT_FOUND',
+      message:
+        `Action '${ownerActionId}' has invalid $outputs reference in '${fieldName}': '${ref}'. ` +
+        `Referenced action '${referencedActionId || '(empty)'}' does not exist.`,
+      path: fieldPath,
+    })
+  }
+
+  for (const action of ir.actions) {
+    if (action.type === 'transform') {
+      for (const [key, value] of Object.entries(action.template)) {
+        pushMissingOutputRef(action.id, `/actions/${action.id}/template/${key}`, `template.${key}`, value)
+      }
+      continue
+    }
+
+    if (action.type === 'evmRead') {
+      for (const [index, arg] of (action.args ?? []).entries()) {
+        pushMissingOutputRef(action.id, `/actions/${action.id}/args/${index}`, `args[${index}]`, arg)
+      }
+      continue
+    }
+
+    if (action.type === 'evmWrite') {
+      pushMissingOutputRef(action.id, `/actions/${action.id}/payloadPath`, 'payloadPath', action.payloadPath)
+      continue
+    }
+
+    if (action.type === 'erc20Transfer') {
+      pushMissingOutputRef(action.id, `/actions/${action.id}/amountPath`, 'amountPath', action.amountPath)
+    }
+  }
+
+  return diagnostics
+}
+
 function parseCronIntervalSeconds(cronExpr: string): number | null {
   const parts = cronExpr.trim().split(/\s+/)
   if (parts.length !== 6) return null
@@ -113,6 +172,7 @@ export function runDeterminismLint(ir: WorkflowIR): Diagnostic[] {
   }
 
   diagnostics.push(...lintResultOrder(ir))
+  diagnostics.push(...lintOutputReferences(ir))
   return diagnostics
 }
 

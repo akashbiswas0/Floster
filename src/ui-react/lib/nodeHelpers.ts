@@ -23,6 +23,19 @@ export interface EditableField {
   options?: string[]
 }
 
+function latestHttpFetchActionId(existingActions: WorkflowNode[]): string | null {
+  for (let i = existingActions.length - 1; i >= 0; i -= 1) {
+    const action = existingActions[i]
+    if (action?.type === 'httpFetch' && typeof action.id === 'string') return action.id
+  }
+  return null
+}
+
+function defaultErc20AmountPath(existingActions: WorkflowNode[]): string {
+  const sourceActionId = latestHttpFetchActionId(existingActions) || 'action_1'
+  return `$outputs.${sourceActionId}.body.number`
+}
+
 export function editableFieldsForNode(node: WorkflowNode): EditableField[] {
   if (node.type === 'cron') {
     return [{ key: 'schedule', label: 'Schedule', input: 'text' }]
@@ -66,6 +79,7 @@ export function makeNode(
   type: string,
   existingCount: number,
   receiverContract: string,
+  existingActions: WorkflowNode[] = [],
 ): WorkflowNode {
   const idx = existingCount + 1
   const id = `${isTriggerType(type) ? 'trigger' : 'action'}_${idx}`
@@ -130,7 +144,7 @@ export function makeNode(
       receiverContract: receiverContract || SEPOLIA_SIMULATION_RECEIVER,
       recipientAddress: DEFAULT_RECIPIENT_ADDRESS,
       tokenDecimals: DEFAULT_TOKEN_DECIMALS,
-      amountPath: '$outputs.action_http_1.body.number',
+      amountPath: defaultErc20AmountPath(existingActions),
       gasLimit: 500000,
     }
   }

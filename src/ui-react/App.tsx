@@ -45,7 +45,7 @@ export default function App() {
     setIr((prev) => {
       const count = allNodes(prev).length
       const meta = getSimulationMeta(prev, prev.runtime.defaultTarget)
-      const node = makeNode(type, count, meta.receiverContract)
+      const node = makeNode(type, count, meta.receiverContract, prev.actions)
       setNodePositions((pos) => {
         const next = new Map(pos)
         next.set(node.id, { x: 40 + (count % 4) * 210, y: 60 + Math.floor(count / 4) * 120 })
@@ -62,7 +62,7 @@ export default function App() {
     setIr((prev) => {
       const count = allNodes(prev).length
       const meta = getSimulationMeta(prev, prev.runtime.defaultTarget)
-      const node = makeNode(type, count, meta.receiverContract)
+      const node = makeNode(type, count, meta.receiverContract, prev.actions)
       setNodePositions((pos) => {
         const next = new Map(pos)
         next.set(node.id, { x, y })
