@@ -8,8 +8,6 @@ interface Props {
   onAddNode: (type: string) => void
   onAiPromptChange: (v: string) => void
   onGenerated: (ir: WorkflowIR) => void
-  onValidate: () => void
-  onCompile: () => void
   onRepair: () => void
   simulationTarget?: string
 }
@@ -31,8 +29,6 @@ export default function Sidebar(props: Props) {
         simulationTarget={props.simulationTarget}
       />
       <SimulationControls
-        onValidate={props.onValidate}
-        onCompile={props.onCompile}
         onRepair={props.onRepair}
       />
     </aside>

@@ -9,7 +9,7 @@ interface Props {
 export default function NodeInputPanel({ selectedNode, onFieldChange }: Props) {
   if (!selectedNode) {
     return (
-      <div className="absolute left-3 right-3 bottom-3 z-[4] bg-panel border border-[rgba(255,255,255,0.08)] border-l-[3px] border-l-accent px-[14px] py-[10px] shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
+      <div className="flex-shrink-0 bg-panel border-t border-[rgba(255,255,255,0.08)] border-l-[3px] border-l-accent px-[14px] py-[10px]">
         <h3 className="m-0 mb-[10px] font-ui text-[13px] font-semibold text-text-primary">Node Inputs</h3>
         <small className="block mt-2 font-mono text-[9px] text-accent bg-[rgba(0,212,255,0.06)] border border-[rgba(0,212,255,0.15)] px-2 py-1">
           Select a node on canvas to edit its required inputs.
@@ -22,7 +22,7 @@ export default function NodeInputPanel({ selectedNode, onFieldChange }: Props) {
 
   if (fields.length === 0) {
     return (
-      <div className="absolute left-3 right-3 bottom-3 z-[4] bg-panel border border-[rgba(255,255,255,0.08)] border-l-[3px] border-l-accent px-[14px] py-[10px] shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
+      <div className="flex-shrink-0 bg-panel border-t border-[rgba(255,255,255,0.08)] border-l-[3px] border-l-accent px-[14px] py-[10px]">
         <h3 className="m-0 mb-[10px] font-ui text-[13px] font-semibold text-text-primary">Node Inputs</h3>
         <small className="block mt-2 font-mono text-[9px] text-accent bg-[rgba(0,212,255,0.06)] border border-[rgba(0,212,255,0.15)] px-2 py-1">
           No editable input fields for {selectedNode.id} ({selectedNode.type}).
@@ -35,7 +35,7 @@ export default function NodeInputPanel({ selectedNode, onFieldChange }: Props) {
     'bg-bg border border-[rgba(255,255,255,0.08)] text-text-primary font-mono text-[11px] px-2 py-1 outline-none transition-colors focus:border-accent focus:shadow-[0_0_0_1px_rgba(0,212,255,0.15)]'
 
   return (
-    <div className="absolute left-3 right-3 bottom-3 z-[4] bg-panel border border-[rgba(255,255,255,0.08)] border-l-[3px] border-l-accent px-[14px] py-[10px] shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
+    <div className="flex-shrink-0 bg-panel border-t border-[rgba(255,255,255,0.08)] border-l-[3px] border-l-accent px-[14px] py-[10px]">
       <h3 className="m-0 mb-[10px] font-ui text-[13px] font-semibold text-text-primary">
         Node Inputs: {selectedNode.name}
       </h3>
