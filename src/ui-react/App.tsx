@@ -178,11 +178,11 @@ export default function App() {
 
   async function handleRepair() {
     try {
-      const validated = await postJSON<{ diagnostics?: unknown[] }>('/api/validate', ir).catch((e) => {
+      const validated = await postJSON<{ diagnostics?: unknown[] }>('/api/validate', apiIR()).catch((e) => {
         return JSON.parse(String((e as Error).message))
       })
       const res = await postJSON<{ ir: unknown }>('/api/ai/repair', {
-        ir,
+        ir: apiIR(),
         diagnostics: (validated as { diagnostics?: unknown[] }).diagnostics || [],
       })
       setIr(normalizeLocalIR(res.ir))

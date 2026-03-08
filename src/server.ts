@@ -8,8 +8,7 @@ app.use(express.json({ limit: '2mb' }))
 
 app.use('/api', buildApiRouter())
 
-// Vite runs as Express middleware — transforms TSX on the fly, handles HMR.
-// No build step, no dist-ui directory needed.
+
 const vite = await createViteServer({
   configFile: path.resolve(process.cwd(), 'vite.config.ts'),
   server: { middlewareMode: true },
@@ -19,6 +18,6 @@ app.use(vite.middlewares)
 
 const port = Number.parseInt(process.env.PORT ?? '4173', 10)
 app.listen(port, () => {
-  // eslint-disable-next-line no-console
+  
   console.log(`CRE Local Builder listening on http://localhost:${port}`)
 })
