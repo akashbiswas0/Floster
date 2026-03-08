@@ -8,6 +8,7 @@ import Topbar from './components/Topbar'
 import CanvasToolbar from './components/CanvasToolbar'
 import WorkflowCanvas from './components/WorkflowCanvas'
 import BottomPanels from './components/BottomPanels'
+import NodeInputPanel from './components/NodeInputPanel'
 
 export default function App() {
   const [ir, setIr] = useState<WorkflowIR>(() => normalizeLocalIR(structuredClone(defaultIR)))
@@ -174,18 +175,50 @@ export default function App() {
 
   async function handleSimulate() {
     if (!checkNodesConnected()) return
-    setIsSimulating(true)
+    setIsSimulating(false)
     try {
-      const meta = getSimulationMeta(ir, simulationTarget)
+      // Step 1: Validate
+      let validatedIR = ir
+      try {
+        const validateRes = await postJSON<{ ir?: unknown; diagnostics?: unknown[] }>('/api/validate', ir)
+        if (validateRes.ir) {
+          validatedIR = normalizeLocalIR(validateRes.ir)
+          setIr(validatedIR)
+        }
+        writeOutput('Step 1 · Validate + Preflight', validateRes)
+        const diags = (validateRes.diagnostics ?? []) as Array<{ severity: string; message: string }>
+        const errors = diags.filter((d) => d.severity === 'error')
+        if (errors.length > 0) return
+      } catch (err) {
+        writeOutput('Step 1 · Validation failed', (err as Error).message)
+        return
+      }
+
+      await new Promise((r) => setTimeout(r, 1000))
+
+      // Step 2: Compile
+      try {
+        const compileRes = await postJSON('/api/compile', { ir: validatedIR })
+        writeOutput('Step 2 · Generate Files', compileRes)
+      } catch (err) {
+        writeOutput('Step 2 · Compile failed', (err as Error).message)
+        return
+      }
+
+      await new Promise((r) => setTimeout(r, 2000))
+
+      // Step 3: Simulate
+      setIsSimulating(true)
+      const meta = getSimulationMeta(validatedIR, simulationTarget)
       const res = await postJSON('/api/simulate', {
-        ir,
+        ir: validatedIR,
         autoCompile: true,
-        workflowPath: './generated/' + ir.metadata.name,
+        workflowPath: './generated/' + validatedIR.metadata.name,
         target: meta.target,
         broadcast: meta.broadcast,
         triggerInput: { mode: 'cron', triggerIndex: 0 },
       })
-      writeOutput('Simulation', formatSimulationResponse(res, meta))
+      writeOutput('Step 3 · Simulation', formatSimulationResponse(res, meta))
     } catch (err) {
       writeOutput('Simulation failed', (err as Error).message)
     } finally {
@@ -255,16 +288,12 @@ export default function App() {
         onAiPromptChange={setAiPrompt}
         onGenerated={handleGenerated}
         simulationTarget={simulationTarget}
-        onValidate={handleValidate}
-        onCompile={handleCompile}
         onRepair={handleRepair}
       />
 
       <section className="flex-1 flex flex-col overflow-hidden min-w-0">
         <Topbar
           selectionText={getSelectionText()}
-          modeLabel={modeLabel}
-          modeDotColor={modeDotColor}
         />
         <CanvasToolbar
           simulationTarget={simulationTarget}
@@ -287,10 +316,16 @@ export default function App() {
             onDeleteNode={handleDeleteNode}
           />
 
+          <NodeInputPanel
+            selectedNode={selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) ?? null : null}
+            onFieldChange={(key, value) => { if (selectedNodeId) handleFieldChange(selectedNodeId, key, value) }}
+          />
+
           <BottomPanels
             irJson={JSON.stringify(ir, null, 2)}
             output={output}
             isSimulating={isSimulating}
+            simulationTarget={simulationTarget}
             onIRJsonChange={handleIRJsonChange}
           />
         </div>

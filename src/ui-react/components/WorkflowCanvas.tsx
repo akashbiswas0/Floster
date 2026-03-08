@@ -3,7 +3,6 @@ import type { WorkflowIR, WorkflowNode, NodePosition, DraggingNodeState } from '
 import { allNodes, isTriggerType } from '../lib/nodeHelpers'
 import CanvasNode from './CanvasNode'
 import EdgeSVGLayer from './EdgeSVGLayer'
-import NodeInputPanel from './NodeInputPanel'
 
 interface PendingEdgeState {
   fromId: string
@@ -72,20 +71,9 @@ export default function WorkflowCanvas({
     }
 
     const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs')
-    const grad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient')
-    grad.setAttribute('id', 'edgeGradient')
-    grad.setAttribute('gradientUnits', 'userSpaceOnUse')
-    const stops: [string, string][] = [['0%', 'rgba(255,255,255,0.12)'], ['50%', '#00d4ff'], ['100%', 'rgba(255,255,255,0.12)']]
-    for (const [offset, color] of stops) {
-      const s = document.createElementNS('http://www.w3.org/2000/svg', 'stop')
-      s.setAttribute('offset', offset)
-      s.setAttribute('stop-color', color)
-      grad.appendChild(s)
-    }
-    defs.appendChild(grad)
     svg.appendChild(defs)
 
-    for (const edge of ir.edges) {
+    for (const [edgeIdx, edge] of ir.edges.entries()) {
       const fromSide = edge.fromSide ?? 'right'
       const toSide = edge.toSide ?? 'left'
       const from = getPortCoords(edge.from, fromSide)
@@ -94,16 +82,30 @@ export default function WorkflowCanvas({
       const { x: x1, y: y1 } = from
       const { x: x2, y: y2 } = to
 
+      // Unique gradient per edge so each one glows correctly
+      const gradId = `edgeGradient-${edgeIdx}`
+      const grad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient')
+      grad.setAttribute('id', gradId)
+      grad.setAttribute('gradientUnits', 'userSpaceOnUse')
       grad.setAttribute('x1', String(x1))
       grad.setAttribute('y1', String(y1))
       grad.setAttribute('x2', String(x2))
       grad.setAttribute('y2', String(y2))
+      const stops: [string, string][] = [['0%', 'rgba(0,212,255,0.4)'], ['50%', '#00d4ff'], ['100%', 'rgba(0,212,255,0.4)']]
+      for (const [offset, color] of stops) {
+        const s = document.createElementNS('http://www.w3.org/2000/svg', 'stop')
+        s.setAttribute('offset', offset)
+        s.setAttribute('stop-color', color)
+        grad.appendChild(s)
+      }
+      defs.appendChild(grad)
 
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
       path.setAttribute('d', makePath(x1, y1, fromSide, x2, y2, toSide))
-      path.setAttribute('stroke', 'url(#edgeGradient)')
+      path.setAttribute('stroke', `url(#${gradId})`)
       path.setAttribute('stroke-width', '2')
       path.setAttribute('fill', 'none')
+      path.setAttribute('style', 'filter:drop-shadow(0 0 4px #001eff)')
       svg.appendChild(path)
 
       for (const [cx, cy] of [[x1, y1], [x2, y2]] as [number, number][]) {
@@ -346,11 +348,11 @@ export default function WorkflowCanvas({
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="flex-1 relative overflow-auto bg-bg canvas-grid"
+      className="flex-1 relative overflow-auto canvas-grid"
       style={{
-        backgroundImage:
-          'linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)',
-        backgroundSize: '12px 12px',
+        backgroundColor: '#000000',
+        backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.15) 1px, transparent 1px)',
+        backgroundSize: '20px 20px',
       }}
     >
       {/* Ambient glow orbs */}
@@ -374,12 +376,6 @@ export default function WorkflowCanvas({
 
       <EdgeSVGLayer ref={svgRef} />
 
-      <NodeInputPanel
-        selectedNode={selectedNode}
-        onFieldChange={(key, value) => {
-          if (selectedNodeId) onFieldChange(selectedNodeId, key, value)
-        }}
-      />
     </div>
   )
 }
