@@ -3,15 +3,12 @@ import AIPromptSection from './AIPromptSection'
 import SimulationControls from './SimulationControls'
 
 interface Props {
-  simulationTarget: string
   aiPrompt: string
   onAddNode: (type: string) => void
   onAiPromptChange: (v: string) => void
   onGenerateAI: () => void
-  onSimulationTargetChange: (v: string) => void
   onValidate: () => void
   onCompile: () => void
-  onSimulate: () => void
   onRepair: () => void
 }
 
@@ -31,11 +28,8 @@ export default function Sidebar(props: Props) {
         onGenerateAI={props.onGenerateAI}
       />
       <SimulationControls
-        simulationTarget={props.simulationTarget}
-        onSimulationTargetChange={props.onSimulationTargetChange}
         onValidate={props.onValidate}
         onCompile={props.onCompile}
-        onSimulate={props.onSimulate}
         onRepair={props.onRepair}
       />
     </aside>
