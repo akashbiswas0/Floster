@@ -239,8 +239,7 @@ export default function App() {
         prompt: aiPrompt.trim(),
         context: { targetName: simulationTarget },
       })
-      setIr(normalizeLocalIR(res.ir))
-      writeOutput('AI generate', res)
+      handleGenerated(res.ir as WorkflowIR)
     } catch (err) {
       writeOutput('AI generate failed', (err as Error).message)
     }

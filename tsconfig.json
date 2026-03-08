@@ -16,5 +16,6 @@
     "types": ["node"],
     "skipLibCheck": true
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["src/ui-react/**/*"]
 }

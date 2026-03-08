@@ -13,11 +13,7 @@ import { CRE_TEMPLATE_SNIPPETS, type TemplateSnippet } from './template-snippets
 import { SYSTEM_PROMPT } from './prompts.js'
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
-// Use the versioned model ID — the unversioned alias does not list amazon-bedrock as a provider
-const OPENROUTER_MODEL = 'anthropic/claude-3-5-sonnet-20241022'
-// Force amazon-bedrock since that is the only provider available on this key
-// OpenRouter expects the display name ("Amazon Bedrock"), not the slug ("amazon-bedrock")
-const OPENROUTER_PROVIDER = { order: ['Amazon Bedrock'], allow_fallbacks: false }
+const OPENROUTER_MODEL = 'anthropic/claude-haiku-4-5'
 
 export interface GenerateIRInput {
   prompt: string
@@ -226,14 +222,13 @@ function fixKnownIssues(ir: WorkflowIR, diagnostics: Diagnostic[]): WorkflowIR {
 async function callOpenRouter(prompt: string, apiKey: string): Promise<string> {
   const requestBody = {
     model: OPENROUTER_MODEL,
-    provider: OPENROUTER_PROVIDER,
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: prompt },
     ],
     stream: false,
   }
-  console.log('[AI] callOpenRouter →', OPENROUTER_MODEL, '| provider:', OPENROUTER_PROVIDER.order)
+  console.log('[AI] callOpenRouter →', OPENROUTER_MODEL)
 
   const response = await fetch(OPENROUTER_URL, {
     method: 'POST',
@@ -279,8 +274,59 @@ function parseIRFromLLMResponse(raw: string): WorkflowIR {
   return parsed as WorkflowIR
 }
 
+/**
+ * Ensures every httpFetch / evmRead that has no downstream transform node gets one inserted.
+ * This is a safety net for models that skip the transform step.
+ */
+function ensureTransformNodes(ir: WorkflowIR): WorkflowIR {
+  const next = structuredClone(ir)
+
+  // Build a set of action ids that already have a direct transform downstream
+  const hasDownstreamTransform = new Set<string>()
+  for (const edge of next.edges) {
+    const target = next.actions.find((a) => a.id === edge.to)
+    if (target?.type === 'transform') {
+      hasDownstreamTransform.add(edge.from)
+    }
+  }
+
+  let insertCount = 0
+  for (const action of [...next.actions]) {
+    if (action.type !== 'httpFetch' && action.type !== 'evmRead') continue
+    if (hasDownstreamTransform.has(action.id)) continue
+
+    // Find any outgoing edges from this action to re-route
+    const successorEdges = next.edges.filter((e) => e.from === action.id)
+
+    insertCount += 1
+    const transformId = `action_transform_auto_${insertCount}`
+    next.actions.push({
+      id: transformId,
+      name: 'Extract Result',
+      type: 'transform',
+      template: {
+        result: `$outputs.${action.id}.body`,
+        timestamp: '$runtime.now',
+      },
+    })
+
+    if (successorEdges.length === 0) {
+      // Leaf — just wire action → transform
+      next.edges.push({ from: action.id, to: transformId })
+    } else {
+      // Insert transform between this action and its existing successors
+      for (const edge of successorEdges) {
+        edge.from = transformId
+      }
+      next.edges.push({ from: action.id, to: transformId })
+    }
+  }
+
+  return next
+}
+
 async function runAutoRepair(ir: WorkflowIR): Promise<{ ir: WorkflowIR; diagnostics: Diagnostic[] }> {
-  let current = structuredClone(ir)
+  let current = ensureTransformNodes(structuredClone(ir))
   let diagnostics: Diagnostic[] = []
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -339,14 +385,13 @@ export async function* streamGenerateIR(
 ): AsyncGenerator<string, void, unknown> {
   const requestBody = {
     model: OPENROUTER_MODEL,
-    provider: OPENROUTER_PROVIDER,
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: input.prompt },
     ],
     stream: true,
   }
-  console.log('[AI] streamGenerateIR →', OPENROUTER_MODEL, '| provider:', OPENROUTER_PROVIDER.order)
+  console.log('[AI] streamGenerateIR →', OPENROUTER_MODEL)
 
   const response = await fetch(OPENROUTER_URL, {
     method: 'POST',

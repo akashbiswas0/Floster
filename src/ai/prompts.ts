@@ -74,6 +74,7 @@ If \`"llmDriven": true\` then \`"outputSchema"\` is required: \`Record<string, "
 - No cycles allowed
 - Every action must be reachable from a trigger via edges
 - Every trigger must connect to at least one action
+- **ALWAYS** include a \`transform\` node immediately after every \`httpFetch\` or \`evmRead\` action to extract and format the response. Never leave httpFetch or evmRead as the terminal node in the graph.
 
 ## Few-Shot Examples
 
@@ -246,6 +247,50 @@ If \`"llmDriven": true\` then \`"outputSchema"\` is required: \`Record<string, "
   "edges": [
     { "from": "trigger_1", "to": "action_read_1" },
     { "from": "action_read_1", "to": "action_transform_1" }
+  ]
+}
+
+### Example 4 — "Fetch ETH price from CoinGecko every 5 minutes"
+
+{
+  "irVersion": "1.0",
+  "metadata": { "name": "eth-price-fetch", "description": "Fetch ETH/USD price from CoinGecko every 5 minutes" },
+  "runtime": {
+    "defaultTarget": "local-simulation",
+    "targets": {
+      "local-simulation": {
+        "rpcs": [{ "chainName": "ethereum-testnet-sepolia", "url": "https://ethereum-sepolia-rpc.publicnode.com" }],
+        "broadcast": false,
+        "receiverContract": "0x0000000000000000000000000000000000000000",
+        "chainExplorerTxBaseUrl": "https://sepolia.etherscan.io/tx/"
+      }
+    }
+  },
+  "triggers": [
+    { "id": "trigger_1", "name": "Every 5 Minutes", "type": "cron", "schedule": "0 */5 * * * *" }
+  ],
+  "actions": [
+    {
+      "id": "action_fetch_1",
+      "name": "Fetch ETH Price from CoinGecko",
+      "type": "httpFetch",
+      "method": "GET",
+      "url": "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd",
+      "consensus": "median"
+    },
+    {
+      "id": "action_transform_1",
+      "name": "Extract Price",
+      "type": "transform",
+      "template": {
+        "price": "$outputs.action_fetch_1.body.ethereum.usd",
+        "timestamp": "$runtime.now"
+      }
+    }
+  ],
+  "edges": [
+    { "from": "trigger_1", "to": "action_fetch_1" },
+    { "from": "action_fetch_1", "to": "action_transform_1" }
   ]
 }
 

@@ -90,10 +90,31 @@ function deepGet(source: unknown, path: string): unknown {
       : trimmedPath
   if (!normalized) return source
 
+  // Split on dots, then further split each segment on bracket notation (e.g. "data[0]" → ["data", "0"])
+  const segments: string[] = []
+  for (const dotPart of normalized.split('.').map((s) => s.trim()).filter(Boolean)) {
+    const bracketMatch = dotPart.match(/^([^\\[]+)((?:\\[\\d+\\])+)$/)
+    if (bracketMatch) {
+      segments.push(bracketMatch[1])
+      for (const idx of bracketMatch[2].matchAll(/\\[(\\d+)\\]/g)) {
+        segments.push(idx[1])
+      }
+    } else {
+      segments.push(dotPart)
+    }
+  }
+
   let current: unknown = source
-  for (const part of normalized.split('.').map((segment) => segment.trim()).filter(Boolean)) {
-    if (typeof current !== 'object' || current === null) return undefined
-    current = (current as Record<string, unknown>)[part]
+  for (const part of segments) {
+    if (current === null || current === undefined) return undefined
+    if (Array.isArray(current)) {
+      const idx = Number(part)
+      current = Number.isInteger(idx) ? current[idx] : undefined
+    } else if (typeof current === 'object') {
+      current = (current as Record<string, unknown>)[part]
+    } else {
+      return undefined
+    }
   }
   return current
 }

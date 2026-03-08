@@ -1,4 +1,4 @@
-import { access, readFile } from 'node:fs/promises'
+import { access, copyFile, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import type { Diagnostic } from '../domain/types.js'
@@ -221,7 +221,21 @@ export async function runOnboardingChecks(
 
   const envFile = path.join(workflowPath, '.env')
   const envExampleFile = path.join(workflowPath, '.env.example')
-  const hasEnv = await exists(envFile)
+  let hasEnv = await exists(envFile)
+
+  // If the generated workflow folder has no .env yet, try copying the project-root .env
+  if (!hasEnv) {
+    const rootEnv = path.resolve(process.cwd(), '.env')
+    if (await exists(rootEnv)) {
+      try {
+        await copyFile(rootEnv, envFile)
+        hasEnv = true
+      } catch {
+        // Copy failed — fall through to the missing-env diagnostics below
+      }
+    }
+  }
+
   const hasEnvExample = await exists(envExampleFile)
   const requiresPrivateKey = await workflowRequiresPrivateKey(workflowPath)
 
