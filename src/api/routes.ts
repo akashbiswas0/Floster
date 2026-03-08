@@ -7,9 +7,9 @@ import { ensureTargetConfig } from '../domain/targets.js'
 import { validateIR } from '../domain/validate.js'
 import type { WorkflowIR, SimulationRequest } from '../domain/types.js'
 import { simulateWorkflow } from '../simulation/index.js'
-import { generateIR, repairIR } from '../ai/index.js'
+import { generateIR, repairIR, streamGenerateIR } from '../ai/index.js'
 
-export function buildApiRouter(): Router {
+export function buildApiRouter(openRouterApiKey: string): Router {
   const router = Router()
 
   router.get('/health', (_req, res) => {
@@ -167,8 +167,62 @@ export function buildApiRouter(): Router {
       context?: { preferredChains?: string[]; targetName?: string }
     }
 
-    const result = await generateIR(context ? { prompt, context } : { prompt })
+    if (!openRouterApiKey) {
+      return res.status(500).json({
+        diagnostics: [{
+          severity: 'error',
+          code: 'OPENROUTER_API_KEY_MISSING',
+          message: 'OPENROUTER_API_KEY is not set on the server. Add it to your .env file.',
+        }],
+      })
+    }
+
+    const result = await generateIR(
+      context ? { prompt, context } : { prompt },
+      openRouterApiKey,
+    )
     res.json(result)
+  })
+
+  router.post('/ai/generate-stream', async (req, res) => {
+    const { prompt, context } = req.body as {
+      prompt: string
+      context?: { preferredChains?: string[]; targetName?: string }
+    }
+
+    if (!prompt?.trim()) {
+      return res.status(400).json({
+        diagnostics: [{ severity: 'error', code: 'PROMPT_REQUIRED', message: 'prompt is required' }],
+      })
+    }
+
+    if (!openRouterApiKey) {
+      return res.status(500).json({
+        diagnostics: [{
+          severity: 'error',
+          code: 'OPENROUTER_API_KEY_MISSING',
+          message: 'OPENROUTER_API_KEY is not set on the server. Add it to your .env file.',
+        }],
+      })
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+    res.flushHeaders()
+
+    try {
+      const input = context ? { prompt, context } : { prompt }
+      for await (const chunk of streamGenerateIR(input, openRouterApiKey)) {
+        res.write(`data: ${JSON.stringify({ token: chunk })}\n\n`)
+      }
+      res.write('data: [DONE]\n\n')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      res.write(`data: ${JSON.stringify({ error: message })}\n\n`)
+    } finally {
+      res.end()
+    }
   })
 
   router.post('/ai/repair', async (req, res) => {

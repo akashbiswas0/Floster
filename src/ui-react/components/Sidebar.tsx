@@ -1,15 +1,17 @@
 import NodePalette from './NodePalette'
 import AIPromptSection from './AIPromptSection'
 import SimulationControls from './SimulationControls'
+import type { WorkflowIR } from '../types/workflow'
 
 interface Props {
   aiPrompt: string
   onAddNode: (type: string) => void
   onAiPromptChange: (v: string) => void
-  onGenerateAI: () => void
+  onGenerated: (ir: WorkflowIR) => void
   onValidate: () => void
   onCompile: () => void
   onRepair: () => void
+  simulationTarget?: string
 }
 
 export default function Sidebar(props: Props) {
@@ -25,7 +27,8 @@ export default function Sidebar(props: Props) {
       <AIPromptSection
         aiPrompt={props.aiPrompt}
         onAiPromptChange={props.onAiPromptChange}
-        onGenerateAI={props.onGenerateAI}
+        onGenerated={props.onGenerated}
+        simulationTarget={props.simulationTarget}
       />
       <SimulationControls
         onValidate={props.onValidate}

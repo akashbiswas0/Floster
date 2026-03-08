@@ -10,6 +10,14 @@ import {
 import { validateIR } from '../domain/validate.js'
 import type { Diagnostic, WorkflowIR } from '../domain/types.js'
 import { CRE_TEMPLATE_SNIPPETS, type TemplateSnippet } from './template-snippets.js'
+import { SYSTEM_PROMPT } from './prompts.js'
+
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
+// Use the versioned model ID — the unversioned alias does not list amazon-bedrock as a provider
+const OPENROUTER_MODEL = 'anthropic/claude-3-5-sonnet-20241022'
+// Force amazon-bedrock since that is the only provider available on this key
+// OpenRouter expects the display name ("Amazon Bedrock"), not the slug ("amazon-bedrock")
+const OPENROUTER_PROVIDER = { order: ['Amazon Bedrock'], allow_fallbacks: false }
 
 export interface GenerateIRInput {
   prompt: string
@@ -215,6 +223,62 @@ function fixKnownIssues(ir: WorkflowIR, diagnostics: Diagnostic[]): WorkflowIR {
   return next
 }
 
+async function callOpenRouter(prompt: string, apiKey: string): Promise<string> {
+  const requestBody = {
+    model: OPENROUTER_MODEL,
+    provider: OPENROUTER_PROVIDER,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: prompt },
+    ],
+    stream: false,
+  }
+  console.log('[AI] callOpenRouter →', OPENROUTER_MODEL, '| provider:', OPENROUTER_PROVIDER.order)
+
+  const response = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+      'HTTP-Referer': 'http://localhost:4173',
+      'X-Title': 'CRE Workflow Builder',
+    },
+    body: JSON.stringify(requestBody),
+  })
+
+  console.log('[AI] callOpenRouter ← status', response.status)
+  if (!response.ok) {
+    const errorBody = await response.text()
+    console.error('[AI] callOpenRouter error body:', errorBody)
+    throw new Error(`OpenRouter error ${response.status}: ${errorBody}`)
+  }
+
+  const json = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>
+  }
+  const content = json.choices?.[0]?.message?.content
+  if (!content) throw new Error('OpenRouter returned an empty content field')
+  console.log('[AI] callOpenRouter received', content.length, 'chars')
+  return content
+}
+
+function parseIRFromLLMResponse(raw: string): WorkflowIR {
+  // Strip optional markdown code fences the model may emit despite instructions
+  const cleaned = raw
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/, '')
+    .trim()
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(cleaned)
+  } catch (err) {
+    throw new Error(`LLM returned non-JSON response: ${(err as Error).message}`)
+  }
+
+  return parsed as WorkflowIR
+}
+
 async function runAutoRepair(ir: WorkflowIR): Promise<{ ir: WorkflowIR; diagnostics: Diagnostic[] }> {
   let current = structuredClone(ir)
   let diagnostics: Diagnostic[] = []
@@ -238,8 +302,22 @@ async function runAutoRepair(ir: WorkflowIR): Promise<{ ir: WorkflowIR; diagnost
   return { ir: current, diagnostics }
 }
 
-export async function generateIR(input: GenerateIRInput): Promise<AIResult> {
+export async function generateIR(input: GenerateIRInput, apiKey?: string): Promise<AIResult> {
   const snippets = rankSnippets(input.prompt)
+
+  if (apiKey) {
+    const rawJson = await callOpenRouter(input.prompt, apiKey)
+    const parsed = parseIRFromLLMResponse(rawJson)
+    const repaired = await runAutoRepair(parsed)
+    const normalized = normalizeWorkflowIR(repaired.ir)
+    return {
+      ir: normalized.ir,
+      diagnostics: [...normalized.diagnostics, ...repaired.diagnostics],
+      snippets,
+    }
+  }
+
+  // Heuristic fallback when no API key is present
   const seedIR = buildHeuristicIR(input)
   const repaired = await runAutoRepair(seedIR)
   const normalized = normalizeWorkflowIR(repaired.ir)
@@ -248,6 +326,81 @@ export async function generateIR(input: GenerateIRInput): Promise<AIResult> {
     ir: normalized.ir,
     diagnostics: [...normalized.diagnostics, ...repaired.diagnostics],
     snippets,
+  }
+}
+
+/**
+ * Streams raw token deltas from OpenRouter and yields each text chunk.
+ * The caller accumulates chunks, then parses the final JSON when the stream ends.
+ */
+export async function* streamGenerateIR(
+  input: GenerateIRInput,
+  apiKey: string,
+): AsyncGenerator<string, void, unknown> {
+  const requestBody = {
+    model: OPENROUTER_MODEL,
+    provider: OPENROUTER_PROVIDER,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: input.prompt },
+    ],
+    stream: true,
+  }
+  console.log('[AI] streamGenerateIR →', OPENROUTER_MODEL, '| provider:', OPENROUTER_PROVIDER.order)
+
+  const response = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+      'HTTP-Referer': 'http://localhost:4173',
+      'X-Title': 'CRE Workflow Builder',
+    },
+    body: JSON.stringify(requestBody),
+  })
+
+  console.log('[AI] streamGenerateIR ← status', response.status)
+  if (!response.ok) {
+    const errorBody = await response.text()
+    console.error('[AI] streamGenerateIR error body:', errorBody)
+    throw new Error(`OpenRouter error ${response.status}: ${errorBody}`)
+  }
+
+  if (!response.body) {
+    throw new Error('OpenRouter returned an empty response body')
+  }
+
+  console.log('[AI] streamGenerateIR stream open, reading chunks…')
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed.startsWith('data:')) continue
+      const data = trimmed.slice(5).trim()
+      if (data === '[DONE]') {
+        console.log('[AI] streamGenerateIR stream complete')
+        return
+      }
+      try {
+        const parsed = JSON.parse(data) as {
+          choices?: Array<{ delta?: { content?: string } }>
+        }
+        const delta = parsed.choices?.[0]?.delta?.content
+        if (delta) yield delta
+      } catch {
+        // Ignore malformed SSE chunks
+      }
+    }
   }
 }
 

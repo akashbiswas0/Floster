@@ -178,11 +178,11 @@ export default function App() {
 
   async function handleRepair() {
     try {
-      const validated = await postJSON<{ diagnostics?: unknown[] }>('/api/validate', apiIR()).catch((e) => {
+      const validated = await postJSON<{ diagnostics?: unknown[] }>('/api/validate', ir).catch((e) => {
         return JSON.parse(String((e as Error).message))
       })
       const res = await postJSON<{ ir: unknown }>('/api/ai/repair', {
-        ir: apiIR(),
+        ir,
         diagnostics: (validated as { diagnostics?: unknown[] }).diagnostics || [],
       })
       setIr(normalizeLocalIR(res.ir))
@@ -191,6 +191,29 @@ export default function App() {
       writeOutput('AI repair failed', (err as Error).message)
     }
   }
+
+  // ── AI generation ─────────────────────────────────────────────────────────
+  const handleGenerated = useCallback((generatedIR: WorkflowIR) => {
+    const normalized = normalizeLocalIR(generatedIR)
+    setIr(normalized)
+    // Auto-assign grid positions for each node in the generated IR
+    const allGeneratedNodes = [
+      ...(generatedIR.triggers ?? []),
+      ...(generatedIR.actions ?? []),
+    ]
+    setNodePositions(() => {
+      const next = new Map<string, NodePosition>()
+      allGeneratedNodes.forEach((node, idx) => {
+        next.set(node.id, {
+          x: 40 + (idx % 4) * 210,
+          y: 60 + Math.floor(idx / 4) * 140,
+        })
+      })
+      return next
+    })
+    setSelectedNodeId(null)
+    writeOutput('AI generate', normalized)
+  }, [])
 
   async function handleGenerateAI() {
     try {
@@ -214,7 +237,8 @@ export default function App() {
         aiPrompt={aiPrompt}
         onAddNode={handleAddNode}
         onAiPromptChange={setAiPrompt}
-        onGenerateAI={handleGenerateAI}
+        onGenerated={handleGenerated}
+        simulationTarget={simulationTarget}
         onValidate={handleValidate}
         onCompile={handleCompile}
         onRepair={handleRepair}
