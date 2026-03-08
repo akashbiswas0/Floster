@@ -51,6 +51,16 @@ export function normalizeLegacyIR(input: unknown): { ir: unknown; diagnostics: D
     }
   }
 
+  // Strip UI-only edge properties (fromSide, toSide) that are not part of the IR schema
+  const edges = ir.edges
+  if (Array.isArray(edges)) {
+    ir.edges = edges.map((edge: unknown) => {
+      if (!edge || typeof edge !== 'object') return edge
+      const { from, to } = edge as Record<string, unknown>
+      return { from, to }
+    })
+  }
+
   return { ir, diagnostics }
 }
 

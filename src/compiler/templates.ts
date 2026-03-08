@@ -60,6 +60,7 @@ function generateMainTS(ir: WorkflowIR): string {
   type Runtime,
 } from '@chainlink/cre-sdk'
 import { decodeFunctionResult, encodeFunctionData, parseUnits } from 'viem'
+import { z } from 'zod'
 
 const IR = ${json(ir)} as const
 const PIPELINES = ${json(pipelines)} as const
@@ -648,7 +649,20 @@ function runPipeline(runtime: Runtime<unknown>, triggerId: string, payload: unkn
   )
 }
 
-function initWorkflow() {
+const configSchema = z.object({
+  generatedAt: z.string().optional(),
+  workflowName: z.string(),
+  target: z.string(),
+  irVersion: z.string(),
+  chainName: z.string().nullable().optional(),
+  rpcUrl: z.string().nullable().optional(),
+  broadcast: z.boolean().default(false),
+  chainExplorerTxBaseUrl: z.string().nullable().optional(),
+  evms: z.array(z.object({ chainName: z.string(), url: z.string() })).default([]),
+  erc20Transfer: z.object({ receiverContract: z.string().nullable().optional() }).optional(),
+})
+
+function initWorkflow(_config: z.infer<typeof configSchema>) {
   const handlers: ReturnType<typeof cre.handler>[] = []
 
   for (const trigger of IR.triggers) {
@@ -697,7 +711,7 @@ function initWorkflow() {
 }
 
 export async function main() {
-  const runner = await Runner.newRunner()
+  const runner = await Runner.newRunner({ configSchema })
   await runner.run(initWorkflow)
 }
 
@@ -763,6 +777,7 @@ function generatePackageJSON(): string {
     dependencies: {
       '@chainlink/cre-sdk': '^1.1.2',
       viem: '^2.39.0',
+      zod: '^3.24.0',
     },
     devDependencies: {
       tsx: '^4.20.5',
