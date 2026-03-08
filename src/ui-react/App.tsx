@@ -14,6 +14,7 @@ export default function App() {
   const [nodePositions, setNodePositions] = useState<Map<string, NodePosition>>(new Map())
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [output, setOutput] = useState('')
+  const [isSimulating, setIsSimulating] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
 
   // ── Derived ──────────────────────────────────────────────────────────────
@@ -139,8 +140,19 @@ export default function App() {
     }
   }
 
+  // ── Connectivity guard ───────────────────────────────────────────────────
+  function checkNodesConnected(): boolean {
+    const totalNodes = ir.triggers.length + ir.actions.length
+    if (totalNodes >= 2 && ir.edges.length === 0) {
+      writeOutput('Action blocked', 'Your workflow nodes are not connected.\n\nPlease connect the nodes using edges before running validate, generate files, or simulate.')
+      return false
+    }
+    return true
+  }
+
   // ── API actions ──────────────────────────────────────────────────────────
   async function handleValidate() {
+    if (!checkNodesConnected()) return
     try {
       const res = await postJSON<{ ir?: unknown; diagnostics?: unknown[] }>('/api/validate', ir)
       if (res.ir) setIr(normalizeLocalIR(res.ir))
@@ -151,6 +163,7 @@ export default function App() {
   }
 
   async function handleCompile() {
+    if (!checkNodesConnected()) return
     try {
       const res = await postJSON('/api/compile', { ir })
       writeOutput('Compile success', res)
@@ -160,6 +173,8 @@ export default function App() {
   }
 
   async function handleSimulate() {
+    if (!checkNodesConnected()) return
+    setIsSimulating(true)
     try {
       const meta = getSimulationMeta(ir, simulationTarget)
       const res = await postJSON('/api/simulate', {
@@ -168,11 +183,13 @@ export default function App() {
         workflowPath: './generated/' + ir.metadata.name,
         target: meta.target,
         broadcast: meta.broadcast,
-        triggerInput: { mode: 'interactive' },
+        triggerInput: { mode: 'cron', triggerIndex: 0 },
       })
       writeOutput('Simulation', formatSimulationResponse(res, meta))
     } catch (err) {
       writeOutput('Simulation failed', (err as Error).message)
+    } finally {
+      setIsSimulating(false)
     }
   }
 
@@ -274,6 +291,7 @@ export default function App() {
           <BottomPanels
             irJson={JSON.stringify(ir, null, 2)}
             output={output}
+            isSimulating={isSimulating}
             onIRJsonChange={handleIRJsonChange}
           />
         </div>

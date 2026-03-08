@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { access, readFile } from 'node:fs/promises'
+import { access, readFile, symlink, unlink } from 'node:fs/promises'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { runOnboardingChecks } from './onboarding.js'
@@ -125,6 +125,36 @@ type DependencySetupResult = {
   debug: string[]
 }
 
+// cre-sdk-javy-plugin ships dist/javy_chainlink_sdk.wasm (underscores) but
+// bin/compile-workflow.ts references javy-chainlink-sdk.plugin.wasm (dashes).
+// Ensure the expected symlink exists so javy can find the plugin.
+async function ensureJavyPluginSymlink(workflowPath: string, debug: string[]): Promise<void> {
+  const distDir = path.join(
+    workflowPath,
+    'node_modules',
+    '@chainlink',
+    'cre-sdk-javy-plugin',
+    'dist',
+  )
+  const target = 'javy_chainlink_sdk.wasm'
+  const linkName = path.join(distDir, 'javy-chainlink-sdk.plugin.wasm')
+  const targetPath = path.join(distDir, target)
+
+  if (!(await exists(targetPath))) return // dist not present yet
+
+  if (await exists(linkName)) return // already exists (real file or symlink)
+
+  try {
+    await symlink(target, linkName)
+    debug.push(`Created javy plugin symlink: javy-chainlink-sdk.plugin.wasm -> ${target}`)
+  } catch (err) {
+    // If it raced with another process, ignore EEXIST
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
+      debug.push(`Warning: could not create javy plugin symlink: ${(err as Error).message}`)
+    }
+  }
+}
+
 async function ensureWorkflowDependencies(
   workflowPath: string,
   logs: Array<{ level: 'stdout' | 'stderr'; line: string }>,
@@ -167,6 +197,7 @@ async function ensureWorkflowDependencies(
 
   if (await exists(creCompilePath)) {
     debug.push('Skipping bun install because cre-compile is already present.')
+    await ensureJavyPluginSymlink(workflowPath, debug)
     return { diagnostics, debug }
   }
 
@@ -233,6 +264,8 @@ async function ensureWorkflowDependencies(
     code: 'SIMULATION_DEP_INSTALL_AUTO',
     message: 'Installed workflow dependencies automatically using `bun install`.',
   })
+
+  await ensureJavyPluginSymlink(workflowPath, debug)
 
   return { diagnostics, debug }
 }

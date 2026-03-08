@@ -105,7 +105,7 @@ export function makeNode(
       name: 'HTTP Fetch',
       type: 'httpFetch',
       method: 'GET',
-      url: 'https://api.coingecko.com/api/v3/ping',
+      url: '',
       consensus: 'identical',
     }
   }

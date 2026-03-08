@@ -3,10 +3,11 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 interface Props {
   irJson: string
   output: string
+  isSimulating: boolean
   onIRJsonChange: (v: string) => void
 }
 
-export default function BottomPanels({ irJson, output, onIRJsonChange }: Props) {
+export default function BottomPanels({ irJson, output, isSimulating, onIRJsonChange }: Props) {
   const [height, setHeight] = useState(220)
   const [irWidth, setIrWidth] = useState<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -115,12 +116,22 @@ export default function BottomPanels({ irJson, output, onIRJsonChange }: Props) 
               + copy
             </button>
           </div>
-          <pre
-            id="output"
-            className="flex-1 font-mono text-[10px] text-text-secondary leading-relaxed px-4 py-3 overflow-auto m-0 whitespace-pre-wrap break-all"
-          >
-            {output}
-          </pre>
+          {isSimulating ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-3">
+              <svg className="animate-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
+                  strokeLinecap="round" style={{ color: 'var(--color-success, #00e5a0)' }} />
+              </svg>
+              <span className="font-mono text-[10px] text-text-muted uppercase tracking-widest">Simulating…</span>
+            </div>
+          ) : (
+            <pre
+              id="output"
+              className="flex-1 font-mono text-[10px] text-text-secondary leading-relaxed px-4 py-3 overflow-auto m-0 whitespace-pre-wrap break-all"
+            >
+              {output}
+            </pre>
+          )}
         </div>
       </div>
     </>
