@@ -98,6 +98,11 @@ function countReachableActionsByType(ir: WorkflowIR, actionType: ActionNode['typ
   return ir.actions.filter((action) => action.type === actionType).length
 }
 
+function countEvmWriteLikeActions(ir: WorkflowIR): number {
+  return ir.actions.filter((action) => action.type === 'evmWrite' || action.type === 'evmPayoutTransfer')
+    .length
+}
+
 export function runDeterminismLint(ir: WorkflowIR): Diagnostic[] {
   const diagnostics: Diagnostic[] = []
 
@@ -117,7 +122,7 @@ export function runPreflight(ir: WorkflowIR): PreflightResult {
   const triggerCount = ir.triggers.length
   const httpActionCount = countReachableActionsByType(ir, 'httpFetch')
   const evmReadCount = countReachableActionsByType(ir, 'evmRead')
-  const evmWriteCount = countReachableActionsByType(ir, 'evmWrite')
+  const evmWriteCount = countEvmWriteLikeActions(ir)
 
   if (triggerCount > CRE_QUOTAS.triggerSubscriptionLimit) {
     diagnostics.push({
@@ -144,7 +149,10 @@ export function runPreflight(ir: WorkflowIR): PreflightResult {
   }
 
   for (const action of ir.actions) {
-    if (action.type === 'evmWrite' && action.gasLimit > CRE_QUOTAS.evmWriteGasLimit) {
+    if (
+      (action.type === 'evmWrite' || action.type === 'evmPayoutTransfer') &&
+      action.gasLimit > CRE_QUOTAS.evmWriteGasLimit
+    ) {
       diagnostics.push({
         severity: 'error',
         code: 'QUOTA_EVM_WRITE_GAS_LIMIT',

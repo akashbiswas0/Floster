@@ -121,6 +121,30 @@ const actionNode = {
       properties: {
         id: { type: 'string', minLength: 1 },
         name: { type: 'string', minLength: 1 },
+        type: { const: 'evmPayoutTransfer' },
+        chainName: { type: 'string', minLength: 1 },
+        receiverContract: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' },
+        recipientAddress: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' },
+        amountPath: { type: 'string', minLength: 2 },
+        gasLimit: { type: 'integer', minimum: 1, maximum: 5000000 },
+      },
+      required: [
+        'id',
+        'name',
+        'type',
+        'chainName',
+        'receiverContract',
+        'recipientAddress',
+        'amountPath',
+        'gasLimit',
+      ],
+      additionalProperties: false,
+    },
+    {
+      type: 'object',
+      properties: {
+        id: { type: 'string', minLength: 1 },
+        name: { type: 'string', minLength: 1 },
         type: { const: 'transform' },
         template: {
           type: 'object',

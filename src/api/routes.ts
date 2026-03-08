@@ -50,14 +50,77 @@ export function buildApiRouter(): Router {
   })
 
   router.post('/simulate', async (req, res) => {
-    const payload = req.body as SimulationRequest
-    const result = await simulateWorkflow(payload)
-
-    if (result.diagnostics.some((d) => d.severity === 'error')) {
-      return res.status(400).json(result)
+    const payload = req.body as SimulationRequest & {
+      ir?: WorkflowIR
+      autoCompile?: boolean
+      outputDir?: string
     }
 
-    return res.json(result)
+    const shouldCompile = payload.autoCompile === true || Boolean(payload.ir)
+    let simulationRequest: SimulationRequest = {
+      workflowPath: payload.workflowPath,
+      target: payload.target,
+      triggerInput: payload.triggerInput,
+    }
+
+    let compileResult:
+      | {
+          generatedFiles: string[]
+          diagnostics: Array<{ severity: 'error' | 'warning' | 'info'; code: string; message: string; path?: string }>
+          simulation: {
+            interactiveCommand: string
+            nonInteractive: Array<{
+              triggerId: string
+              triggerType: 'cron' | 'http' | 'evmLog'
+              triggerIndex: number
+              command: string
+            }>
+          }
+        }
+      | undefined
+
+    if (shouldCompile) {
+      if (!payload.ir) {
+        return res.status(400).json({
+          diagnostics: [
+            {
+              severity: 'error',
+              code: 'SIMULATE_COMPILE_IR_REQUIRED',
+              message: 'autoCompile requires an `ir` payload.',
+            },
+          ],
+        })
+      }
+
+      const destination = payload.outputDir ?? path.join(process.cwd(), 'generated', payload.ir.metadata.name)
+      compileResult = await compileIR(payload.ir, destination)
+      if (compileResult.diagnostics.some((d) => d.severity === 'error')) {
+        return res.status(400).json({
+          compile: compileResult,
+          diagnostics: compileResult.diagnostics,
+        })
+      }
+
+      simulationRequest = {
+        workflowPath: destination,
+        target: payload.target,
+        triggerInput: payload.triggerInput,
+      }
+    }
+
+    const result = await simulateWorkflow(simulationRequest)
+
+    if (result.diagnostics.some((d) => d.severity === 'error')) {
+      return res.status(400).json({
+        ...result,
+        compile: compileResult,
+      })
+    }
+
+    return res.json({
+      ...result,
+      compile: compileResult,
+    })
   })
 
   router.post('/ai/generate', async (req, res) => {

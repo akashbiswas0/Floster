@@ -3,7 +3,13 @@ export type IRVersion = '1.0'
 export type ConsensusStrategy = 'identical' | 'median' | 'fields'
 
 export type TriggerType = 'cron' | 'http' | 'evmLog'
-export type ActionType = 'httpFetch' | 'evmRead' | 'evmWrite' | 'transform' | 'consensus'
+export type ActionType =
+  | 'httpFetch'
+  | 'evmRead'
+  | 'evmWrite'
+  | 'evmPayoutTransfer'
+  | 'transform'
+  | 'consensus'
 
 export interface RPCConfig {
   chainName: string
@@ -77,6 +83,15 @@ export interface EvmWriteActionNode extends BaseNode {
   gasLimit: number
 }
 
+export interface EvmPayoutTransferActionNode extends BaseNode {
+  type: 'evmPayoutTransfer'
+  chainName: string
+  receiverContract: string
+  recipientAddress: string
+  amountPath: string
+  gasLimit: number
+}
+
 export interface TransformActionNode extends BaseNode {
   type: 'transform'
   template: Record<string, string>
@@ -94,6 +109,7 @@ export type ActionNode =
   | HttpFetchActionNode
   | EvmReadActionNode
   | EvmWriteActionNode
+  | EvmPayoutTransferActionNode
   | TransformActionNode
   | ConsensusActionNode
 

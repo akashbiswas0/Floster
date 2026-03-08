@@ -27,26 +27,27 @@ const defaultIR = {
   ],
   actions: [
     {
-      id: 'action_1',
+      id: 'action_http_1',
       name: 'HTTP Fetch',
       type: 'httpFetch',
       method: 'GET',
-      url: 'https://api.coingecko.com/api/v3/ping',
+      url: 'http://localhost:3002/random',
       consensus: 'identical',
     },
     {
-      id: 'action_2',
-      name: 'Transform',
-      type: 'transform',
-      template: {
-        timestamp: '$runtime.now',
-        body: '$outputs.action_1.body',
-      },
+      id: 'action_transfer_1',
+      name: 'EVM Payout Transfer',
+      type: 'evmPayoutTransfer',
+      chainName: 'ethereum-testnet-sepolia',
+      receiverContract: '0x0000000000000000000000000000000000000002',
+      recipientAddress: '0x0000000000000000000000000000000000000003',
+      amountPath: '$outputs.action_http_1.body.number',
+      gasLimit: 500000,
     },
   ],
   edges: [
-    { from: 'trigger_1', to: 'action_1' },
-    { from: 'action_1', to: 'action_2' },
+    { from: 'trigger_1', to: 'action_http_1' },
+    { from: 'action_http_1', to: 'action_transfer_1' },
   ],
 }
 
@@ -57,6 +58,9 @@ const outputEl = document.getElementById('output')
 const edgeFrom = document.getElementById('edge-from')
 const edgeTo = document.getElementById('edge-to')
 const canvas = document.getElementById('canvas')
+const defaultUrlInput = document.getElementById('default-url')
+const defaultRecipientInput = document.getElementById('default-recipient')
+const defaultReceiverContractInput = document.getElementById('default-receiver-contract')
 
 function writeOutput(title, data) {
   outputEl.textContent = `${title}\n\n${typeof data === 'string' ? data : JSON.stringify(data, null, 2)}`
@@ -72,6 +76,36 @@ function syncFromJSON() {
     render()
   } catch (error) {
     writeOutput('JSON parse error', error.message)
+  }
+}
+
+function findAction(type) {
+  return ir.actions.find((action) => action.type === type)
+}
+
+function syncDefaultInputsFromIR() {
+  const fetchNode = findAction('httpFetch')
+  if (fetchNode && defaultUrlInput) {
+    defaultUrlInput.value = fetchNode.url
+  }
+
+  const transferNode = findAction('evmPayoutTransfer')
+  if (transferNode && defaultRecipientInput && defaultReceiverContractInput) {
+    defaultRecipientInput.value = transferNode.recipientAddress
+    defaultReceiverContractInput.value = transferNode.receiverContract
+  }
+}
+
+function applyDefaultInputsToIR() {
+  const fetchNode = findAction('httpFetch')
+  if (fetchNode && defaultUrlInput) {
+    fetchNode.url = defaultUrlInput.value.trim()
+  }
+
+  const transferNode = findAction('evmPayoutTransfer')
+  if (transferNode && defaultRecipientInput && defaultReceiverContractInput) {
+    transferNode.recipientAddress = defaultRecipientInput.value.trim()
+    transferNode.receiverContract = defaultReceiverContractInput.value.trim()
   }
 }
 
@@ -116,6 +150,7 @@ function drawEdges(nodesById) {
 function render() {
   canvas.innerHTML = ''
   refreshEdgeSelectors()
+  syncDefaultInputsFromIR()
   syncJSON()
 
   const nodes = allNodes()
@@ -211,6 +246,19 @@ function makeNode(type) {
     }
   }
 
+  if (type === 'evmPayoutTransfer') {
+    return {
+      id,
+      name: 'EVM Payout Transfer',
+      type: 'evmPayoutTransfer',
+      chainName: 'ethereum-testnet-sepolia',
+      receiverContract: defaultReceiverContractInput?.value.trim() || '0x0000000000000000000000000000000000000002',
+      recipientAddress: defaultRecipientInput?.value.trim() || '0x0000000000000000000000000000000000000003',
+      amountPath: '$outputs.action_http_1.body.number',
+      gasLimit: 500000,
+    }
+  }
+
   if (type === 'consensus') {
     return {
       id,
@@ -256,11 +304,18 @@ document.getElementById('add-edge').addEventListener('click', () => {
   render()
 })
 
+document.getElementById('apply-default-inputs').addEventListener('click', () => {
+  applyDefaultInputsToIR()
+  render()
+})
+
 jsonText.addEventListener('change', syncFromJSON)
 
 document.getElementById('validate-btn').addEventListener('click', async () => {
   try {
     syncFromJSON()
+    applyDefaultInputsToIR()
+    syncJSON()
     const res = await postJSON('/api/validate', ir)
     writeOutput('Validation + preflight', res)
   } catch (error) {
@@ -271,6 +326,8 @@ document.getElementById('validate-btn').addEventListener('click', async () => {
 document.getElementById('compile-btn').addEventListener('click', async () => {
   try {
     syncFromJSON()
+    applyDefaultInputsToIR()
+    syncJSON()
     const res = await postJSON('/api/compile', { ir })
     writeOutput('Compile success', res)
   } catch (error) {
@@ -281,8 +338,11 @@ document.getElementById('compile-btn').addEventListener('click', async () => {
 document.getElementById('simulate-btn').addEventListener('click', async () => {
   try {
     syncFromJSON()
-    const workflowPath = `${window.location.origin.replace(/^https?:\/\//, '')}`
+    applyDefaultInputsToIR()
+    syncJSON()
     const res = await postJSON('/api/simulate', {
+      ir,
+      autoCompile: true,
       workflowPath: './generated/' + ir.metadata.name,
       target: ir.runtime.defaultTarget,
       triggerInput: { mode: 'interactive' },

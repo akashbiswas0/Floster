@@ -13,6 +13,23 @@
         <p class="muted">Local simulation only</p>
 
         <section class="panel">
+          <h2>Default Payout Inputs</h2>
+          <label class="field-label"
+            >HTTP URL
+            <input id="default-url" type="text" value="http://localhost:3002/random" />
+          </label>
+          <label class="field-label"
+            >Recipient (EOA)
+            <input id="default-recipient" type="text" value="0x0000000000000000000000000000000000000003" />
+          </label>
+          <label class="field-label"
+            >Receiver Contract
+            <input id="default-receiver-contract" type="text" value="0x0000000000000000000000000000000000000002" />
+          </label>
+          <button id="apply-default-inputs">Apply To Default Flow</button>
+        </section>
+
+        <section class="panel">
           <h2>Node Palette</h2>
           <div class="palette-grid">
             <button data-node="cron">+ Cron Trigger</button>
@@ -21,6 +38,7 @@
             <button data-node="httpFetch">+ HTTP Fetch</button>
             <button data-node="evmRead">+ EVM Read</button>
             <button data-node="evmWrite">+ EVM Write</button>
+            <button data-node="evmPayoutTransfer">+ EVM Payout Transfer</button>
             <button data-node="transform">+ Transform</button>
             <button data-node="consensus">+ Consensus</button>
           </div>

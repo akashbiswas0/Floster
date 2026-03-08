@@ -58,7 +58,7 @@ function generateMainTS(ir: WorkflowIR): string {
   type NodeRuntime,
   type Runtime,
 } from '@chainlink/cre-sdk'
-import { decodeFunctionResult, encodeFunctionData } from 'viem'
+import { decodeFunctionResult, encodeAbiParameters, encodeFunctionData, parseAbiParameters, parseUnits } from 'viem'
 
 const IR = ${json(ir)} as const
 const PIPELINES = ${json(pipelines)} as const
@@ -155,7 +155,7 @@ function applyTemplate(
   runtime: Runtime<unknown>,
   ctx: WorkflowContext,
 ): string {
-  return template.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_, raw) => {
+  return template.replace(/\\{\\{\\s*([^}]+)\\s*\\}\\}/g, (_, raw) => {
     const value = readRef(raw.trim(), runtime, ctx)
     return value === undefined ? '' : String(value)
   })
@@ -165,13 +165,20 @@ function runHttpFetch(node: any, runtime: Runtime<unknown>, ctx: WorkflowContext
   const httpClient = new cre.capabilities.HTTPClient()
 
   const execute = (nodeRuntime: NodeRuntime<unknown>) => {
-    const req = {
+    const req: {
+      method: string
+      url: string
+      headers: Record<string, string>
+      body?: string
+    } = {
       method: node.method,
       url: applyTemplate(node.url, runtime, ctx),
       headers: node.headers ?? {},
-      body: node.bodyTemplate
-        ? Buffer.from(applyTemplate(node.bodyTemplate, runtime, ctx), 'utf8').toString('base64')
-        : undefined,
+    }
+
+    if (node.bodyTemplate) {
+      const bodyText = applyTemplate(node.bodyTemplate, runtime, ctx)
+      req.body = Buffer.from(bodyText, 'utf8').toString('base64')
     }
 
     const response = httpClient.sendRequest(nodeRuntime, req).result()
@@ -284,6 +291,83 @@ function runEvmWrite(node: any, runtime: Runtime<unknown>, ctx: WorkflowContext)
   }
 }
 
+function runEvmPayoutTransfer(node: any, runtime: Runtime<unknown>, ctx: WorkflowContext): unknown {
+  const network =
+    getNetwork({ chainFamily: 'evm', chainSelectorName: node.chainName, isTestnet: true }) ||
+    getNetwork({ chainFamily: 'evm', chainSelectorName: node.chainName, isTestnet: false })
+
+  if (!network) {
+    throw new Error('Network not found for ' + node.chainName)
+  }
+
+  if (typeof node.recipientAddress !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(node.recipientAddress)) {
+    throw new Error('Invalid recipient address: ' + String(node.recipientAddress))
+  }
+
+  if (typeof node.receiverContract !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(node.receiverContract)) {
+    throw new Error('Invalid receiver contract address: ' + String(node.receiverContract))
+  }
+
+  const amountRaw = readRef(node.amountPath, runtime, ctx)
+  if (amountRaw === undefined || amountRaw === null) {
+    throw new Error('Missing payout amount at path: ' + node.amountPath)
+  }
+
+  const amountText = String(amountRaw).trim()
+  let amountWei: bigint
+  try {
+    amountWei = parseUnits(amountText, 18)
+  } catch {
+    throw new Error('Invalid ETH amount at path ' + node.amountPath + ': ' + amountText)
+  }
+
+  if (amountWei <= 0n) {
+    throw new Error('Payout amount must be greater than zero at path ' + node.amountPath)
+  }
+
+  runtime.log(
+    'Preparing payout transfer receiver=' +
+      node.receiverContract +
+      ' recipient=' +
+      node.recipientAddress +
+      ' amountWei=' +
+      amountWei.toString(),
+  )
+
+  const reportData = encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountWei'), [
+    node.recipientAddress,
+    amountWei,
+  ])
+
+  const report = runtime
+    .report({
+      encodedPayload: hexToBase64(reportData),
+      encoderName: 'evm',
+      signingAlgo: 'ecdsa',
+      hashingAlgo: 'keccak256',
+    })
+    .result()
+
+  const evmClient = new cre.capabilities.EVMClient(network.chainSelector.selector)
+  const response = evmClient
+    .writeReport(runtime, {
+      receiver: node.receiverContract,
+      report,
+      gasConfig: {
+        gasLimit: String(node.gasLimit),
+      },
+    })
+    .result()
+
+  return {
+    txStatus: response.txStatus,
+    txHash: bytesToHex(response.txHash || new Uint8Array(32)),
+    errorMessage: response.errorMessage || '',
+    recipientAddress: node.recipientAddress,
+    amountWei: amountWei.toString(),
+  }
+}
+
 function runTransform(node: any, runtime: Runtime<unknown>, ctx: WorkflowContext): unknown {
   const output: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(node.template ?? {})) {
@@ -326,6 +410,8 @@ function executeAction(
       return runEvmRead(node, runtime, ctx)
     case 'evmWrite':
       return runEvmWrite(node, runtime, ctx)
+    case 'evmPayoutTransfer':
+      return runEvmPayoutTransfer(node, runtime, ctx)
     case 'transform':
       return runTransform(node, runtime, ctx)
     case 'consensus':
@@ -478,6 +564,9 @@ function generatePackageJSON(): string {
     private: true,
     type: 'module',
     scripts: {
+      postinstall: 'bunx cre-setup',
+      'cre-compile': 'cre-compile',
+      build: 'bun cre-compile main.ts wasm/workflow.wasm',
       dev: 'tsx main.ts',
       test: 'echo "No tests generated"',
     },

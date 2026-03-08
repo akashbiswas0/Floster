@@ -9,6 +9,42 @@ describe('IR validation + lint + preflight', () => {
     expect(result.valid).toBe(true)
   })
 
+  it('accepts evmPayoutTransfer action shape', () => {
+    const ir = structuredClone(validIRFixture)
+    ir.actions.push({
+      id: 'action_transfer_1',
+      name: 'Transfer',
+      type: 'evmPayoutTransfer',
+      chainName: 'ethereum-testnet-sepolia',
+      receiverContract: '0x0000000000000000000000000000000000000002',
+      recipientAddress: '0x0000000000000000000000000000000000000003',
+      amountPath: '$outputs.action_1.body.number',
+      gasLimit: 500000,
+    })
+    ir.edges.push({ from: 'action_1', to: 'action_transfer_1' })
+
+    const result = validateIR(ir)
+    expect(result.valid).toBe(true)
+  })
+
+  it('rejects evmPayoutTransfer with invalid recipient address', () => {
+    const ir = structuredClone(validIRFixture)
+    ir.actions.push({
+      id: 'action_transfer_1',
+      name: 'Transfer',
+      type: 'evmPayoutTransfer',
+      chainName: 'ethereum-testnet-sepolia',
+      receiverContract: '0x0000000000000000000000000000000000000002',
+      recipientAddress: 'not-an-address',
+      amountPath: '$outputs.action_1.body.number',
+      gasLimit: 500000,
+    })
+    ir.edges.push({ from: 'action_1', to: 'action_transfer_1' })
+
+    const result = validateIR(ir)
+    expect(result.valid).toBe(false)
+  })
+
   it('rejects non-deterministic Date.now usage', () => {
     const ir = structuredClone(validIRFixture)
     const transform = ir.actions.find((action) => action.type === 'transform')
