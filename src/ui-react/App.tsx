@@ -5,6 +5,7 @@ import { allNodes, makeNode, isTriggerType } from './lib/nodeHelpers'
 import { postJSON, formatSimulationResponse, getSimulationMeta } from './lib/api'
 import Sidebar from './components/Sidebar'
 import Topbar from './components/Topbar'
+import CanvasToolbar from './components/CanvasToolbar'
 import WorkflowCanvas from './components/WorkflowCanvas'
 import BottomPanels from './components/BottomPanels'
 
@@ -210,15 +211,12 @@ export default function App() {
   return (
     <main className="h-screen flex overflow-hidden bg-bg text-text-primary font-ui">
       <Sidebar
-        simulationTarget={simulationTarget}
         aiPrompt={aiPrompt}
         onAddNode={handleAddNode}
         onAiPromptChange={setAiPrompt}
         onGenerateAI={handleGenerateAI}
-        onSimulationTargetChange={handleSimulationTargetChange}
         onValidate={handleValidate}
         onCompile={handleCompile}
-        onSimulate={handleSimulate}
         onRepair={handleRepair}
       />
 
@@ -227,6 +225,13 @@ export default function App() {
           selectionText={getSelectionText()}
           modeLabel={modeLabel}
           modeDotColor={modeDotColor}
+        />
+        <CanvasToolbar
+          simulationTarget={simulationTarget}
+          modeLabel={modeLabel}
+          modeDotColor={modeDotColor}
+          onSimulationTargetChange={handleSimulationTargetChange}
+          onSimulate={handleSimulate}
         />
 
         <div className="flex-1 flex flex-col overflow-hidden">
