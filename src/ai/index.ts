@@ -258,7 +258,6 @@ async function callOpenRouter(prompt: string, apiKey: string): Promise<string> {
 }
 
 function parseIRFromLLMResponse(raw: string): WorkflowIR {
-  // Strip optional markdown code fences the model may emit despite instructions
   const cleaned = raw
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```\s*$/, '')
@@ -274,14 +273,10 @@ function parseIRFromLLMResponse(raw: string): WorkflowIR {
   return parsed as WorkflowIR
 }
 
-/**
- * Ensures every httpFetch / evmRead that has no downstream transform node gets one inserted.
- * This is a safety net for models that skip the transform step.
- */
+
 function ensureTransformNodes(ir: WorkflowIR): WorkflowIR {
   const next = structuredClone(ir)
 
-  // Build a set of action ids that already have a direct transform downstream
   const hasDownstreamTransform = new Set<string>()
   for (const edge of next.edges) {
     const target = next.actions.find((a) => a.id === edge.to)
@@ -295,7 +290,6 @@ function ensureTransformNodes(ir: WorkflowIR): WorkflowIR {
     if (action.type !== 'httpFetch' && action.type !== 'evmRead') continue
     if (hasDownstreamTransform.has(action.id)) continue
 
-    // Find any outgoing edges from this action to re-route
     const successorEdges = next.edges.filter((e) => e.from === action.id)
 
     insertCount += 1
@@ -311,10 +305,8 @@ function ensureTransformNodes(ir: WorkflowIR): WorkflowIR {
     })
 
     if (successorEdges.length === 0) {
-      // Leaf — just wire action → transform
       next.edges.push({ from: action.id, to: transformId })
     } else {
-      // Insert transform between this action and its existing successors
       for (const edge of successorEdges) {
         edge.from = transformId
       }
@@ -363,7 +355,6 @@ export async function generateIR(input: GenerateIRInput, apiKey?: string): Promi
     }
   }
 
-  // Heuristic fallback when no API key is present
   const seedIR = buildHeuristicIR(input)
   const repaired = await runAutoRepair(seedIR)
   const normalized = normalizeWorkflowIR(repaired.ir)
@@ -375,10 +366,7 @@ export async function generateIR(input: GenerateIRInput, apiKey?: string): Promi
   }
 }
 
-/**
- * Streams raw token deltas from OpenRouter and yields each text chunk.
- * The caller accumulates chunks, then parses the final JSON when the stream ends.
- */
+
 export async function* streamGenerateIR(
   input: GenerateIRInput,
   apiKey: string,
@@ -443,7 +431,7 @@ export async function* streamGenerateIR(
         const delta = parsed.choices?.[0]?.delta?.content
         if (delta) yield delta
       } catch {
-        // Ignore malformed SSE chunks
+        
       }
     }
   }

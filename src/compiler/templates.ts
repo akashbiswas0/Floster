@@ -45,6 +45,7 @@ function generateMainTS(ir: WorkflowIR): string {
 
   return `import {
   bytesToHex,
+  ConfidentialHTTPClient,
   consensusIdenticalAggregation,
   consensusMedianAggregation,
   cre,
@@ -52,7 +53,9 @@ function generateMainTS(ir: WorkflowIR): string {
   getNetwork,
   hexToBase64,
   LAST_FINALIZED_BLOCK_NUMBER,
+  ok,
   Runner,
+  type ConfidentialHTTPSendRequester,
   type CronPayload,
   type EVMLog,
   type HTTPPayload,
@@ -249,6 +252,74 @@ function applyTemplate(
     const value = readRef(raw.trim(), runtime, ctx)
     return value === undefined ? '' : String(value)
   })
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  const ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  let out = ''
+  for (let i = 0; i < bytes.length; i += 3) {
+    const a = bytes[i] ?? 0
+    const b = bytes[i + 1]
+    const c = bytes[i + 2]
+    out += ALPHA[a >> 2]
+    out += ALPHA[((a & 3) << 4) | (b ?? 0) >> 4]
+    out += b === undefined ? '=' : ALPHA[((b & 15) << 2) | (c ?? 0) >> 6]
+    out += c === undefined ? '=' : ALPHA[c & 63]
+  }
+  return out
+}
+
+function runConfidentialHttp(node: any, runtime: Runtime<unknown>, ctx: WorkflowContext): unknown {
+  const confClient = new ConfidentialHTTPClient()
+  const encryptOutput = node.encryptOutput !== 'false'
+
+  const fetcher = (sendRequester: ConfidentialHTTPSendRequester) => {
+    const vaultSecrets: Array<{ key: string; owner: string }> = [
+      { key: node.apiKeySecret, owner: node.owner || '' },
+    ]
+    if (encryptOutput) {
+      vaultSecrets.push({ key: 'san_marino_aes_gcm_encryption_key', owner: node.owner || '' })
+    }
+
+    const response = sendRequester
+      .sendRequest({
+        request: {
+          url: node.url,
+          method: node.method,
+          multiHeaders: {
+            'X-Api-Key': { values: [\`{{.\${node.apiKeySecret}}}\`] },
+          },
+        },
+        vaultDonSecrets: vaultSecrets,
+        encryptOutput,
+      })
+      .result()
+
+    if (!ok(response)) {
+      throw new Error(\`Confidential HTTP request failed with status: \${response.statusCode}\`)
+    }
+
+    if (encryptOutput) {
+      const body = response.body ?? new Uint8Array(0)
+      const bodyBase64 = bytesToBase64(body)
+      const bodyBytes = Array.from(body)
+      const nonceHex = bytesToHex(new Uint8Array(bodyBytes.slice(0, 12))).slice(2)
+      const ciphertextHex = bytesToHex(new Uint8Array(bodyBytes.slice(12))).slice(2)
+      runtime.log('--- CipherTools AES-GCM decrypt (https://www.ciphertools.org/tools/aes/gcm) ---')
+      runtime.log('Ciphertext + tag (hex): ' + ciphertextHex)
+      runtime.log('Nonce/IV (hex): ' + nonceHex)
+      return { bodyBase64 }
+    }
+
+    const text = Buffer.from(response.body ?? new Uint8Array(0)).toString('utf8')
+    let parsed: unknown = text
+    try { parsed = JSON.parse(text) } catch { /* keep as string */ }
+    return { statusCode: response.statusCode, body: parsed }
+  }
+
+  return confClient
+    .sendRequest(runtime, fetcher, consensusIdenticalAggregation<unknown>())(node)
+    .result()
 }
 
 function runHttpFetch(node: any, runtime: Runtime<unknown>, ctx: WorkflowContext): unknown {
@@ -618,6 +689,8 @@ function executeAction(
   switch (node.type) {
     case 'httpFetch':
       return runHttpFetch(node, runtime, ctx)
+    case 'confidentialHttp':
+      return runConfidentialHttp(node, runtime, ctx)
     case 'evmRead':
       return runEvmRead(node, runtime, ctx)
     case 'evmWrite':
@@ -750,7 +823,7 @@ function generateWorkflowYAML(ir: WorkflowIR): string {
 
   for (const target of targets) {
     const safe = sanitizeTargetName(target)
-    const secretsPath = ir.secrets ? '../secrets.yaml' : ''
+    const secretsPath = ir.secrets ? './secrets.yaml' : ''
     lines.push(`${target}:`)
     lines.push(`  user-workflow:`)
     lines.push(`    workflow-name: "${ir.metadata.name}-${safe}"`)

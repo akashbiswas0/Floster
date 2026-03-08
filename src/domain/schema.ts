@@ -80,6 +80,21 @@ const actionNode = {
       properties: {
         id: { type: 'string', minLength: 1 },
         name: { type: 'string', minLength: 1 },
+        type: { const: 'confidentialHttp' },
+        method: { enum: ['GET', 'POST'] },
+        url: { type: 'string', minLength: 1 },
+        apiKeySecret: { type: 'string', minLength: 1 },
+        owner: { type: 'string' },
+        encryptOutput: { enum: ['true', 'false'] },
+      },
+      required: ['id', 'name', 'type', 'method', 'url', 'apiKeySecret'],
+      additionalProperties: false,
+    },
+    {
+      type: 'object',
+      properties: {
+        id: { type: 'string', minLength: 1 },
+        name: { type: 'string', minLength: 1 },
         type: { const: 'evmRead' },
         chainName: { type: 'string', minLength: 1 },
         contractAddress: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' },

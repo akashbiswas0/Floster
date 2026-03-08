@@ -47,6 +47,15 @@ export function editableFieldsForNode(node: WorkflowNode): EditableField[] {
       { key: 'consensus', label: 'Consensus', input: 'select', options: ['identical', 'median'] },
     ]
   }
+  if (node.type === 'confidentialHttp') {
+    return [
+      { key: 'url', label: 'URL', input: 'text' },
+      { key: 'method', label: 'Method', input: 'select', options: ['GET', 'POST'] },
+      { key: 'apiKeySecret', label: 'API Key Secret', input: 'text' },
+      { key: 'owner', label: 'Owner Address', input: 'text' },
+      { key: 'encryptOutput', label: 'Encrypt Output', input: 'select', options: ['true', 'false'] },
+    ]
+  }
   if (node.type === 'erc20Transfer') {
     return [
       { key: 'tokenAddress', label: 'Token Address', input: 'text' },
@@ -85,7 +94,7 @@ export function makeNode(
   const id = `${isTriggerType(type) ? 'trigger' : 'action'}_${idx}`
 
   if (type === 'cron') {
-    return { id, name: 'Cron Trigger', type: 'cron', schedule: '0 */10 * * * *' }
+    return { id, name: 'Cron Trigger', type: 'cron', schedule: '*/30 * * * * *' }
   }
   if (type === 'http') {
     return { id, name: 'HTTP Trigger', type: 'http', authMode: 'none' }
@@ -107,6 +116,18 @@ export function makeNode(
       method: 'GET',
       url: '',
       consensus: 'identical',
+    }
+  }
+  if (type === 'confidentialHttp') {
+    return {
+      id,
+      name: 'Confidential HTTP',
+      type: 'confidentialHttp',
+      method: 'GET',
+      url: 'https://api.api-ninjas.com/v1/jokes',
+      apiKeySecret: 'myApiKey',
+      owner: '',
+      encryptOutput: 'true',
     }
   }
   if (type === 'evmRead') {

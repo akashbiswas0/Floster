@@ -5,6 +5,7 @@ export type ConsensusStrategy = 'identical' | 'median' | 'fields'
 export type TriggerType = 'cron' | 'http' | 'evmLog'
 export type ActionType =
   | 'httpFetch'
+  | 'confidentialHttp'
   | 'evmRead'
   | 'evmWrite'
   | 'erc20Transfer'
@@ -62,6 +63,15 @@ export interface HttpFetchActionNode extends BaseNode {
   consensus: Exclude<ConsensusStrategy, 'fields'>
 }
 
+export interface ConfidentialHttpActionNode extends BaseNode {
+  type: 'confidentialHttp'
+  method: 'GET' | 'POST'
+  url: string
+  apiKeySecret: string
+  owner?: string
+  encryptOutput?: 'true' | 'false'
+}
+
 export interface ABIField {
   name: string
   type: string
@@ -112,6 +122,7 @@ export interface ConsensusActionNode extends BaseNode {
 
 export type ActionNode =
   | HttpFetchActionNode
+  | ConfidentialHttpActionNode
   | EvmReadActionNode
   | EvmWriteActionNode
   | Erc20TransferActionNode

@@ -13,9 +13,38 @@ function applyErc20Defaults(action: Record<string, unknown>): void {
   }
 }
 
+function isValidSecretName(value: string): boolean {
+  return /^[a-zA-Z_][a-zA-Z0-9_]{0,31}$/.test(value)
+}
+
+function normalizeConfidentialHttp(action: Record<string, unknown>, diagnostics: Diagnostic[]): void {
+  const raw = typeof action.apiKeySecret === 'string' ? action.apiKeySecret : ''
+  if (raw && !isValidSecretName(raw)) {
+    action.apiKeySecret = 'myApiKey'
+    diagnostics.push({
+      severity: 'warning',
+      code: 'IR_CONFIDENTIAL_HTTP_SECRET_NAME_FIXED',
+      message:
+        'The "API Key Secret" field contained what looks like an actual key value instead of a secret name. It has been reset to "myApiKey". Set the real key in your .env as MY_API_KEY_ALL.',
+    })
+  }
+
+  diagnostics.push({
+    severity: 'info',
+    code: 'IR_CONFIDENTIAL_HTTP',
+    message:
+      'Confidential HTTP node compiles to ConfidentialHTTPClient. Secret injection and response encryption are active in both simulation and deployed workflows.',
+  })
+}
+
 function normalizeLegacyAction(action: Record<string, unknown>, diagnostics: Diagnostic[]): void {
   if (action.type === 'erc20Transfer') {
     applyErc20Defaults(action)
+    return
+  }
+
+  if (action.type === 'confidentialHttp') {
+    normalizeConfidentialHttp(action, diagnostics)
     return
   }
 
@@ -35,6 +64,46 @@ function normalizeLegacyAction(action: Record<string, unknown>, diagnostics: Dia
   })
 }
 
+function toEnvVarName(secretKey: string): string {
+  return secretKey
+    .replace(/([a-z])([A-Z])/g, '$1_$2')
+    .replace(/[^a-zA-Z0-9]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+    .toUpperCase() + '_ALL'
+}
+
+function injectConfidentialSecrets(ir: Record<string, unknown>): void {
+  const actions = ir.actions
+  if (!Array.isArray(actions)) return
+
+  const secretsToInject: Record<string, string[]> = {}
+
+  for (const action of actions) {
+    if (!action || typeof action !== 'object') continue
+    const a = action as Record<string, unknown>
+    if (a.type !== 'confidentialHttp') continue
+
+    const key = typeof a.apiKeySecret === 'string' ? a.apiKeySecret : 'myApiKey'
+    secretsToInject[key] = [toEnvVarName(key)]
+
+    if (a.encryptOutput === 'true') {
+      const aesKey = 'san_marino_aes_gcm_encryption_key'
+      secretsToInject[aesKey] = ['AES_KEY_ALL']
+    }
+  }
+
+  if (Object.keys(secretsToInject).length === 0) return
+
+  const existing = ir.secrets as Record<string, unknown> | undefined
+  const existingNames =
+    existing && typeof existing === 'object' && typeof (existing as Record<string, unknown>).secretsNames === 'object'
+      ? ((existing as Record<string, unknown>).secretsNames as Record<string, string[]>)
+      : {}
+
+  ir.secrets = { secretsNames: { ...secretsToInject, ...existingNames } }
+}
+
 export function normalizeLegacyIR(input: unknown): { ir: unknown; diagnostics: Diagnostic[] } {
   if (!input || typeof input !== 'object') {
     return { ir: input, diagnostics: [] }
@@ -50,6 +119,8 @@ export function normalizeLegacyIR(input: unknown): { ir: unknown; diagnostics: D
       normalizeLegacyAction(action as Record<string, unknown>, diagnostics)
     }
   }
+
+  injectConfidentialSecrets(ir)
 
   // Strip UI-only edge properties (fromSide, toSide) that are not part of the IR schema
   const edges = ir.edges
