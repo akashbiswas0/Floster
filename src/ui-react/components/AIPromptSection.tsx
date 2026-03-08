@@ -116,7 +116,7 @@ export default function AIPromptSection({ aiPrompt, onAiPromptChange, onGenerate
   return (
     <section className="px-3 pt-2 pb-3 border-t border-[rgba(255,255,255,0.06)] mt-1">
       <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-purple mb-2 px-1 flex items-center gap-1">
-        <IconSparkle /> AI Prompt → IR
+        <IconSparkle /> AI Prompt → workflow
       </p>
 
       <textarea
@@ -133,12 +133,12 @@ export default function AIPromptSection({ aiPrompt, onAiPromptChange, onGenerate
         <button
           onClick={handleGenerate}
           disabled={isStreaming}
-          className="flex-1 font-mono text-[12px] font-medium text-panel bg-gradient-to-r from-purple to-accent px-3 py-1.5 hover:opacity-90 transition-opacity cursor-pointer border-0 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+          className="flex-1 font-mono text-[12px] font-medium text-black bg-white px-3 py-1.5 hover:opacity-90 transition-opacity cursor-pointer border-0 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
         >
           {isStreaming ? (
             <><IconSpinner /> Generating…</>
           ) : (
-            '+ Generate IR'
+            'Generate Workflow'
           )}
         </button>
 
