@@ -1,82 +1,235 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="h-full">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CRE Local Visual Builder</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              bg:        '#070a0f',
+              panel:     '#0c1018',
+              surface:   '#111720',
+              'surface-hover': '#161e2a',
+              'border-default': 'rgba(255,255,255,0.06)',
+              'border-bright':  'rgba(255,255,255,0.12)',
+              accent:    '#00d4ff',
+              purple:    '#7c6aff',
+              success:   '#00e5a0',
+              warning:   '#ffb547',
+              danger:    '#ff4e6a',
+              'text-primary':   '#e8edf5',
+              'text-secondary': '#8a97aa',
+              'text-muted':     '#4a5568',
+            },
+            fontFamily: {
+              mono: ['"IBM Plex Mono"', 'monospace'],
+              ui:   ['Outfit', 'sans-serif'],
+            },
+          }
+        }
+      }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/assets/styles.css" />
   </head>
-  <body>
-    <main class="app-shell">
-      <aside class="sidebar">
-        <h1>CRE Builder</h1>
-        <p class="muted">Dry run or Sepolia broadcast</p>
+  <body class="bg-bg text-[#e8edf5] font-ui h-full overflow-hidden">
+    <main class="app-shell h-screen flex overflow-hidden">
 
-        <section class="panel">
-          <h2>Node Palette</h2>
-          <div class="palette-grid">
-            <button data-node="cron">+ Cron Trigger</button>
-            <button data-node="http">+ HTTP Trigger</button>
-            <button data-node="evmLog">+ EVM Log Trigger</button>
-            <button data-node="httpFetch">+ HTTP Fetch</button>
-            <button data-node="evmRead">+ EVM Read</button>
-            <button data-node="evmWrite">+ EVM Write</button>
-            <button data-node="erc20Transfer">+ ERC20 Transfer</button>
-            <button data-node="transform">+ Transform</button>
-            <button data-node="consensus">+ Consensus</button>
+      <!-- SIDEBAR -->
+      <aside class="sidebar w-[210px] flex-shrink-0 bg-panel border-r border-[rgba(255,255,255,0.06)] flex flex-col overflow-y-auto">
+
+        <!-- Brand -->
+        <div class="px-4 py-3 border-b border-[rgba(255,255,255,0.06)]">
+          <h1 class="font-ui font-bold text-[15px] text-[#e8edf5] tracking-wide">CRE Builder</h1>
+          <p class="font-mono text-[10px] text-[#4a5568] mt-0.5 uppercase tracking-widest">Workflow Studio</p>
+        </div>
+
+        <!-- Node Palette -->
+        <section class="px-3 pt-3 pb-2">
+          <p class="font-mono text-[9px] uppercase tracking-[0.12em] text-[#4a5568] mb-2 px-1">Node Palette</p>
+          <div class="flex flex-col gap-1">
+
+            <!-- Triggers -->
+            <p class="font-mono text-[8px] uppercase tracking-[0.1em] text-[#4a5568] px-1 pt-1">Triggers</p>
+            <button data-node="cron"        class="palette-btn trigger-node">
+              <span class="palette-icon bg-[rgba(255,78,106,0.15)] text-[#ff4e6a]">⏱</span>
+              <span class="palette-label">Cron Trigger</span>
+              <span class="palette-plus">+</span>
+            </button>
+            <button data-node="http"        class="palette-btn trigger-node">
+              <span class="palette-icon bg-[rgba(255,78,106,0.15)] text-[#ff4e6a]">🌐</span>
+              <span class="palette-label">HTTP Trigger</span>
+              <span class="palette-plus">+</span>
+            </button>
+            <button data-node="evmLog"      class="palette-btn trigger-node">
+              <span class="palette-icon bg-[rgba(255,78,106,0.15)] text-[#ff4e6a]">⛓</span>
+              <span class="palette-label">EVM Log Trigger</span>
+              <span class="palette-plus">+</span>
+            </button>
+
+            <!-- Actions -->
+            <p class="font-mono text-[8px] uppercase tracking-[0.1em] text-[#4a5568] px-1 pt-2">Actions</p>
+            <button data-node="httpFetch"    class="palette-btn http-node">
+              <span class="palette-icon bg-[rgba(0,212,255,0.12)] text-[#00d4ff]">↓</span>
+              <span class="palette-label">HTTP Fetch</span>
+              <span class="palette-plus">+</span>
+            </button>
+            <button data-node="evmRead"      class="palette-btn evm-node">
+              <span class="palette-icon bg-[rgba(124,106,255,0.15)] text-[#7c6aff]">📖</span>
+              <span class="palette-label">EVM Read</span>
+              <span class="palette-plus">+</span>
+            </button>
+            <button data-node="evmWrite"     class="palette-btn evm-node">
+              <span class="palette-icon bg-[rgba(124,106,255,0.15)] text-[#7c6aff]">✎</span>
+              <span class="palette-label">EVM Write</span>
+              <span class="palette-plus">+</span>
+            </button>
+            <button data-node="erc20Transfer" class="palette-btn erc20-node">
+              <span class="palette-icon bg-[rgba(0,229,160,0.12)] text-[#00e5a0]">◈</span>
+              <span class="palette-label">ERC20 Transfer</span>
+              <span class="palette-plus">+</span>
+            </button>
+            <button data-node="transform"    class="palette-btn transform-node">
+              <span class="palette-icon bg-[rgba(255,181,71,0.12)] text-[#ffb547]">⇄</span>
+              <span class="palette-label">Transform</span>
+              <span class="palette-plus">+</span>
+            </button>
+            <button data-node="consensus"    class="palette-btn transform-node">
+              <span class="palette-icon bg-[rgba(255,181,71,0.12)] text-[#ffb547]">⊕</span>
+              <span class="palette-label">Consensus</span>
+              <span class="palette-plus">+</span>
+            </button>
           </div>
         </section>
 
-        <section class="panel">
-          <h2>AI Prompt → IR</h2>
-          <textarea id="ai-prompt" rows="4" placeholder="Describe your workflow goal"></textarea>
-          <button id="generate-ai">Generate IR</button>
+        <!-- AI Prompt -->
+        <section class="px-3 pt-2 pb-3 border-t border-[rgba(255,255,255,0.06)] mt-1">
+          <p class="font-mono text-[9px] uppercase tracking-[0.12em] text-[#7c6aff] mb-2 px-1">✦ AI Prompt → IR</p>
+          <textarea
+            id="ai-prompt"
+            rows="3"
+            placeholder="Describe your workflow goal..."
+            class="w-full bg-[#070a0f] border border-[rgba(255,255,255,0.08)] text-[#e8edf5] text-[11px] font-mono placeholder-[#4a5568] rounded-none px-2 py-2 resize-none focus:outline-none focus:border-[#7c6aff] focus:ring-1 focus:ring-[rgba(124,106,255,0.3)] transition-colors"
+          ></textarea>
+          <button id="generate-ai" class="mt-2 w-full font-mono text-[11px] font-medium text-[#0c1018] bg-gradient-to-r from-[#7c6aff] to-[#00d4ff] px-3 py-1.5 rounded-none hover:opacity-90 transition-opacity cursor-pointer border-0">
+            + Generate IR
+          </button>
         </section>
 
-        <section class="panel">
-          <h2>Actions</h2>
-          <label class="field-label">
-            Simulation Mode
-            <select id="simulate-mode">
-              <option value="local-simulation">Dry Run</option>
-              <option value="sepolia-broadcast">Broadcast to Sepolia</option>
-            </select>
-          </label>
-          <button id="validate-btn">Validate + Preflight</button>
-          <button id="compile-btn">Generate Files</button>
-          <button id="simulate-btn">Simulate (Interactive)</button>
-          <button id="repair-btn">AI Repair IR</button>
+        <!-- Actions -->
+        <section class="px-3 pt-2 pb-4 border-t border-[rgba(255,255,255,0.06)]">
+          <p class="font-mono text-[9px] uppercase tracking-[0.12em] text-[#4a5568] mb-2 px-1">Simulation Mode</p>
+          <select id="simulate-mode" class="w-full bg-[#070a0f] border border-[rgba(255,255,255,0.08)] text-[#8a97aa] font-mono text-[11px] px-2 py-1.5 focus:outline-none focus:border-[#00d4ff] cursor-pointer rounded-none mb-3">
+            <option value="local-simulation">Dry Run</option>
+            <option value="sepolia-broadcast">Broadcast to Sepolia</option>
+          </select>
+
+          <div class="flex flex-col gap-1.5">
+            <button id="validate-btn" class="sidebar-action-btn border-[rgba(255,181,71,0.25)] text-[#ffb547] hover:bg-[rgba(255,181,71,0.07)]">
+              ⬡ Validate + Preflight
+            </button>
+            <button id="compile-btn" class="sidebar-action-btn border-[rgba(255,255,255,0.08)] text-[#8a97aa] hover:bg-[rgba(255,255,255,0.04)]">
+              ◻ Generate Files
+            </button>
+            <button id="simulate-btn" class="sidebar-action-btn border-[rgba(0,229,160,0.25)] text-[#00e5a0] hover:bg-[rgba(0,229,160,0.07)]">
+              ▶ Simulate (Interactive)
+            </button>
+            <button id="repair-btn" class="sidebar-action-btn border-[rgba(124,106,255,0.25)] text-[#7c6aff] hover:bg-[rgba(124,106,255,0.07)]">
+              ✦ AI Repair IR
+            </button>
+          </div>
         </section>
       </aside>
 
-      <section class="workspace">
-        <div class="canvas-header">
-          <h2>Workflow Canvas</h2>
-          <p id="selection">Select a node and connect using Edge controls.</p>
+      <!-- WORKSPACE -->
+      <section class="workspace flex-1 flex flex-col overflow-hidden bg-bg min-w-0">
+
+        <!-- Topbar -->
+        <header class="h-12 flex-shrink-0 bg-panel border-b border-[rgba(255,255,255,0.06)] flex items-center justify-between px-5">
+          <div class="flex items-center gap-3">
+            <span class="font-ui font-bold text-[14px] text-[#e8edf5] tracking-wide">CRE Builder</span>
+            <span class="mode-badge flex items-center gap-1.5 px-2 py-0.5 border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.03)] font-mono text-[9px] uppercase tracking-widest text-[#8a97aa]">
+              <span class="mode-dot w-1.5 h-1.5 rounded-full bg-[#00d4ff] pulse-dot"></span>
+              <span id="mode-label">Dry Run · Sepolia</span>
+            </span>
+          </div>
+          <p id="selection" class="font-mono text-[10px] text-[#8a97aa] bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.07)] px-2 py-0.5">
+            Select a node and connect using Edge controls.
+          </p>
+        </header>
+
+        <!-- Edge Builder Bar -->
+        <div class="h-[46px] flex-shrink-0 bg-panel border-b border-[rgba(255,255,255,0.06)] flex items-center gap-3 px-5">
+          <span class="font-mono text-[9px] uppercase tracking-widest text-[#4a5568]">From</span>
+          <select id="edge-from" class="edge-select"></select>
+          <span class="font-mono text-[#4a5568] text-[12px]">→</span>
+          <span class="font-mono text-[9px] uppercase tracking-widest text-[#4a5568]">To</span>
+          <select id="edge-to"   class="edge-select"></select>
+          <button id="add-edge" class="ml-1 font-mono text-[10px] text-[#00d4ff] border border-[rgba(0,212,255,0.3)] bg-[rgba(0,212,255,0.06)] px-3 py-1 hover:bg-[rgba(0,212,255,0.12)] transition-colors cursor-pointer rounded-none">
+            + Add Edge
+          </button>
         </div>
 
-        <div class="edge-controls">
-          <label>From <select id="edge-from"></select></label>
-          <label>To <select id="edge-to"></select></label>
-          <button id="add-edge">Add Edge</button>
-        </div>
+        <!-- Canvas + bottom panels wrapper -->
+        <div class="flex-1 flex flex-col overflow-hidden">
 
-        <div id="canvas" class="canvas">
-          <div id="node-inputs" class="node-inputs"></div>
-        </div>
+          <!-- Canvas -->
+          <div id="canvas" class="canvas flex-1 relative overflow-auto bg-bg canvas-dots">
+            <!-- Ambient glow orbs -->
+            <div class="pointer-events-none absolute top-[-60px] left-[-60px] w-[260px] h-[260px] rounded-full bg-[#00d4ff] opacity-[0.06] blur-[100px]"></div>
+            <div class="pointer-events-none absolute top-[30%] right-[-40px] w-[320px] h-[320px] rounded-full bg-[#7c6aff] opacity-[0.07] blur-[100px]"></div>
 
-        <div class="json-pane">
-          <h3>Workflow IR JSON</h3>
-          <textarea id="ir-json" spellcheck="false"></textarea>
-        </div>
+            <span class="absolute top-4 left-5 font-ui font-bold text-[18px] text-[#e8edf5] pointer-events-none z-10">Workflow Canvas</span>
 
-        <div class="output-pane">
-          <h3>Output</h3>
-          <pre id="output"></pre>
+            <div id="node-inputs" class="node-inputs"></div>
+          </div>
+
+          <!-- Bottom panels -->
+          <div class="flex-shrink-0 h-[200px] flex border-t border-[rgba(255,255,255,0.06)]">
+
+            <!-- IR JSON -->
+            <div class="flex-1 flex flex-col border-r border-[rgba(255,255,255,0.06)] bg-panel overflow-hidden">
+              <div class="flex items-center justify-between px-4 py-2 border-b border-[rgba(255,255,255,0.06)]">
+                <div class="flex items-center gap-2">
+                  <span class="font-ui text-[12px] font-semibold text-[#e8edf5]">Workflow IR JSON</span>
+                  <span class="font-mono text-[8px] uppercase tracking-widest text-[#7c6aff] border border-[rgba(124,106,255,0.3)] bg-[rgba(124,106,255,0.08)] px-1.5 py-0.5">IR v1.0</span>
+                </div>
+                <button onclick="navigator.clipboard.writeText(document.getElementById('ir-json').value)" class="font-mono text-[9px] text-[#4a5568] hover:text-[#8a97aa] border border-[rgba(255,255,255,0.06)] px-2 py-0.5 bg-transparent cursor-pointer transition-colors rounded-none">+ copy</button>
+              </div>
+              <textarea id="ir-json" spellcheck="false" class="flex-1 w-full bg-[#070a0f] text-[#8a97aa] font-mono text-[10px] leading-relaxed px-4 py-3 border-0 resize-none focus:outline-none overflow-auto"></textarea>
+            </div>
+
+            <!-- Output -->
+            <div class="flex-1 flex flex-col bg-panel overflow-hidden">
+              <div class="flex items-center justify-between px-4 py-2 border-b border-[rgba(255,255,255,0.06)]">
+                <div class="flex items-center gap-2">
+                  <span class="font-ui text-[12px] font-semibold text-[#e8edf5]">Output</span>
+                  <span class="font-mono text-[8px] uppercase tracking-widest text-[#00e5a0] border border-[rgba(0,229,160,0.3)] bg-[rgba(0,229,160,0.08)] px-1.5 py-0.5">SIMULATION</span>
+                </div>
+                <button onclick="navigator.clipboard.writeText(document.getElementById('output').textContent)" class="font-mono text-[9px] text-[#4a5568] hover:text-[#8a97aa] border border-[rgba(255,255,255,0.06)] px-2 py-0.5 bg-transparent cursor-pointer transition-colors rounded-none">+ copy</button>
+              </div>
+              <pre id="output" class="flex-1 font-mono text-[10px] text-[#8a97aa] leading-relaxed px-4 py-3 overflow-auto m-0 whitespace-pre-wrap break-all"></pre>
+            </div>
+
+          </div>
         </div>
       </section>
     </main>
 
     <script type="module" src="/assets/app.js"></script>
+    <script>
+      // Live-reload client — only active in dev (SSE endpoint exists)
+      ;(function () {
+        const es = new EventSource('/__reload')
+        es.onmessage = (e) => { if (e.data === 'reload') location.reload() }
+        es.onerror = () => es.close() // silently stop if server closes
+      })()
+    </script>
   </body>
 </html>

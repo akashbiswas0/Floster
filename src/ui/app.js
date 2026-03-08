@@ -206,6 +206,22 @@ function updateSelectionText() {
   document.getElementById('selection').textContent = text
 }
 
+function updateModeLabel() {
+  const modeEl = document.getElementById('mode-label')
+  const dotEl = document.querySelector('.pulse-dot')
+  const target = currentSimulationTarget()
+  if (target === 'sepolia-broadcast') {
+    if (modeEl) modeEl.textContent = 'Broadcast · Sepolia'
+    if (dotEl) { dotEl.style.backgroundColor = '#00e5a0' }
+  } else if (target === 'sepolia-production') {
+    if (modeEl) modeEl.textContent = 'Production · Sepolia'
+    if (dotEl) { dotEl.style.backgroundColor = '#ffb547' }
+  } else {
+    if (modeEl) modeEl.textContent = 'Dry Run · Sepolia'
+    if (dotEl) { dotEl.style.backgroundColor = '#00d4ff' }
+  }
+}
+
 function syncJSON() {
   jsonText.value = JSON.stringify(ir, null, 2)
 }
@@ -341,6 +357,26 @@ function drawEdges(nodesById) {
   svg.style.height = '100%'
   svg.style.pointerEvents = 'none'
 
+  // Define gradient for edge stroke
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs')
+  const grad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient')
+  grad.setAttribute('id', 'edgeGradient')
+  grad.setAttribute('gradientUnits', 'userSpaceOnUse')
+  const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop')
+  stop1.setAttribute('offset', '0%')
+  stop1.setAttribute('stop-color', 'rgba(255,255,255,0.12)')
+  const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop')
+  stop2.setAttribute('offset', '50%')
+  stop2.setAttribute('stop-color', '#00d4ff')
+  const stop3 = document.createElementNS('http://www.w3.org/2000/svg', 'stop')
+  stop3.setAttribute('offset', '100%')
+  stop3.setAttribute('stop-color', 'rgba(255,255,255,0.12)')
+  grad.appendChild(stop1)
+  grad.appendChild(stop2)
+  grad.appendChild(stop3)
+  defs.appendChild(grad)
+  svg.appendChild(defs)
+
   for (const edge of ir.edges) {
     const from = nodesById.get(edge.from)
     const to = nodesById.get(edge.to)
@@ -351,10 +387,31 @@ function drawEdges(nodesById) {
     const x2 = to.x
     const y2 = to.y + 26
 
+    // Update gradient to span between the two points
+    grad.setAttribute('x1', String(x1))
+    grad.setAttribute('y1', String(y1))
+    grad.setAttribute('x2', String(x2))
+    grad.setAttribute('y2', String(y2))
+
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
     path.setAttribute('class', 'edge')
     path.setAttribute('d', `M ${x1} ${y1} C ${x1 + 50} ${y1}, ${x2 - 50} ${y2}, ${x2} ${y2}`)
     svg.appendChild(path)
+
+    // Connector dots
+    const dot1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+    dot1.setAttribute('class', 'edge-dot')
+    dot1.setAttribute('cx', String(x1))
+    dot1.setAttribute('cy', String(y1))
+    dot1.setAttribute('r', '4')
+    svg.appendChild(dot1)
+
+    const dot2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+    dot2.setAttribute('class', 'edge-dot')
+    dot2.setAttribute('cx', String(x2))
+    dot2.setAttribute('cy', String(y2))
+    dot2.setAttribute('r', '4')
+    svg.appendChild(dot2)
   }
 
   canvas.appendChild(svg)
@@ -380,6 +437,7 @@ function render() {
     selectedNodeId = nodes[0]?.id ?? null
   }
   updateSelectionText()
+  updateModeLabel()
   const nodesById = new Map()
 
   let triggerIndex = 0
@@ -388,7 +446,8 @@ function render() {
   for (const node of nodes) {
     const div = document.createElement('div')
     const isTrigger = ['cron', 'http', 'evmLog'].includes(node.type)
-    div.className = `node ${isTrigger ? 'trigger' : 'action'}`
+    const isErc20 = node.type === 'erc20Transfer'
+    div.className = `node ${isTrigger ? 'trigger' : isErc20 ? 'action erc20' : 'action'}`
     if (node.id === selectedNodeId) {
       div.classList.add('selected')
     }
@@ -402,7 +461,8 @@ function render() {
     div.style.left = `${x}px`
     div.style.top = `${y}px`
 
-    div.innerHTML = `<h4>${node.name}</h4><p>${node.id} · ${node.type}</p>`
+    const typeLabel = isTrigger ? 'TRIGGER' : node.type.replace(/([A-Z])/g, ' $1').trim().toUpperCase()
+    div.innerHTML = `<div class="node-type-label">${typeLabel}</div><h4>${node.name}</h4><p>${node.id} · ${node.type}</p>`
 
     div.addEventListener('click', () => {
       selectedNodeId = node.id
