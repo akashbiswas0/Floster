@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module'
 import type { ErrorObject } from 'ajv'
+import { normalizeLegacyIR } from './normalize.js'
 import { workflowIRSchema } from './schema.js'
 import { validateGraphTopology } from './graph.js'
 import type { Diagnostic, ValidationResult, WorkflowIR } from './types.js'
@@ -39,15 +40,16 @@ function validateUniqueNodeIds(ir: WorkflowIR): Diagnostic[] {
 }
 
 export function validateIR(input: unknown): ValidationResult {
-  const diagnostics: Diagnostic[] = []
+  const normalized = normalizeLegacyIR(input)
+  const diagnostics: Diagnostic[] = [...normalized.diagnostics]
 
-  const schemaOk = validate(input)
+  const schemaOk = validate(normalized.ir)
   if (!schemaOk) {
     diagnostics.push(...fromAjvErrors())
     return { valid: false, diagnostics }
   }
 
-  const ir = input as WorkflowIR
+  const ir = normalized.ir as WorkflowIR
   diagnostics.push(...validateUniqueNodeIds(ir))
   diagnostics.push(...validateGraphTopology(ir))
 

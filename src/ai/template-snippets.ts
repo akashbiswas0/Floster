@@ -5,7 +5,7 @@ export interface TemplateSnippet {
   summary: string
   pattern: {
     trigger: 'cron' | 'http' | 'evmLog'
-    actions: Array<'httpFetch' | 'evmRead' | 'evmWrite' | 'transform' | 'consensus'>
+    actions: Array<'httpFetch' | 'evmRead' | 'evmWrite' | 'erc20Transfer' | 'transform' | 'consensus'>
   }
 }
 

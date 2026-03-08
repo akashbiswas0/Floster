@@ -1,0 +1,13 @@
+[
+  {
+    "type": "function",
+    "name": "transferToken",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      { "name": "token", "type": "address" },
+      { "name": "recipient", "type": "address" },
+      { "name": "amount", "type": "uint256" }
+    ],
+    "outputs": []
+  }
+]

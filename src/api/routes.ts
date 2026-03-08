@@ -2,6 +2,8 @@ import path from 'node:path'
 import { Router } from 'express'
 import { compileIR } from '../compiler/index.js'
 import { runDeterminismLint, runPreflight } from '../domain/lint.js'
+import { normalizeWorkflowIR } from '../domain/normalize.js'
+import { ensureTargetConfig } from '../domain/targets.js'
 import { validateIR } from '../domain/validate.js'
 import type { WorkflowIR, SimulationRequest } from '../domain/types.js'
 import { simulateWorkflow } from '../simulation/index.js'
@@ -15,11 +17,15 @@ export function buildApiRouter(): Router {
   })
 
   router.post('/validate', (req, res) => {
-    const payload = req.body
+    const normalized = normalizeWorkflowIR(req.body)
+    const payload = normalized.ir
     const validation = validateIR(payload)
 
     if (!validation.valid) {
-      return res.status(400).json(validation)
+      return res.status(400).json({
+        ...validation,
+        diagnostics: [...normalized.diagnostics, ...validation.diagnostics],
+      })
     }
 
     const ir = payload as WorkflowIR
@@ -28,8 +34,9 @@ export function buildApiRouter(): Router {
 
     return res.json({
       valid: lintDiagnostics.every((d) => d.severity !== 'error') && preflight.valid,
-      diagnostics: [...validation.diagnostics, ...lintDiagnostics, ...preflight.diagnostics],
+      diagnostics: [...normalized.diagnostics, ...validation.diagnostics, ...lintDiagnostics, ...preflight.diagnostics],
       quotas: preflight.quotas,
+      ir,
     })
   })
 
@@ -39,14 +46,21 @@ export function buildApiRouter(): Router {
       outputDir?: string
     }
 
-    const destination = outputDir ?? path.join(process.cwd(), 'generated', ir.metadata.name)
-    const result = await compileIR(ir, destination)
+    const normalized = normalizeWorkflowIR(ir)
+    const destination = outputDir ?? path.join(process.cwd(), 'generated', normalized.ir.metadata.name)
+    const result = await compileIR(normalized.ir, destination)
 
     if (result.diagnostics.some((d) => d.severity === 'error')) {
-      return res.status(400).json(result)
+      return res.status(400).json({
+        ...result,
+        diagnostics: [...normalized.diagnostics, ...result.diagnostics],
+      })
     }
 
-    return res.json(result)
+    return res.json({
+      ...result,
+      diagnostics: [...normalized.diagnostics, ...result.diagnostics],
+    })
   })
 
   router.post('/simulate', async (req, res) => {
@@ -92,19 +106,43 @@ export function buildApiRouter(): Router {
         })
       }
 
-      const destination = payload.outputDir ?? path.join(process.cwd(), 'generated', payload.ir.metadata.name)
-      compileResult = await compileIR(payload.ir, destination)
+      const normalized = normalizeWorkflowIR(payload.ir)
+      const compileIRPayload = structuredClone(normalized.ir)
+      if (payload.target) {
+        compileIRPayload.runtime = ensureTargetConfig(compileIRPayload.runtime, payload.target)
+        compileIRPayload.runtime.defaultTarget = payload.target
+      }
+      const destination = payload.outputDir ?? path.join(process.cwd(), 'generated', normalized.ir.metadata.name)
+      compileResult = await compileIR(compileIRPayload, destination)
       if (compileResult.diagnostics.some((d) => d.severity === 'error')) {
         return res.status(400).json({
-          compile: compileResult,
-          diagnostics: compileResult.diagnostics,
+          compile: {
+            ...compileResult,
+            diagnostics: [...normalized.diagnostics, ...compileResult.diagnostics],
+          },
+          diagnostics: [...normalized.diagnostics, ...compileResult.diagnostics],
         })
+      }
+
+      compileResult = {
+        ...compileResult,
+        diagnostics: [...normalized.diagnostics, ...compileResult.diagnostics],
       }
 
       simulationRequest = {
         workflowPath: destination,
         target: payload.target,
         triggerInput: payload.triggerInput,
+        ...(payload.broadcast !== undefined ? { broadcast: payload.broadcast } : {}),
+      }
+    }
+
+    if (!shouldCompile) {
+      simulationRequest = {
+        workflowPath: payload.workflowPath,
+        target: payload.target,
+        triggerInput: payload.triggerInput,
+        ...(payload.broadcast !== undefined ? { broadcast: payload.broadcast } : {}),
       }
     }
 

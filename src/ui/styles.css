@@ -95,7 +95,7 @@ button:hover {
 .workspace {
   padding: 18px;
   display: grid;
-  grid-template-rows: auto auto 260px 220px 220px;
+  grid-template-rows: auto auto 320px 220px 220px;
   gap: 12px;
 }
 
@@ -126,6 +126,34 @@ button:hover {
   color: var(--muted);
 }
 
+.node-inputs {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #cfdccc;
+  border-radius: 12px;
+  padding: 10px;
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 4;
+  box-shadow: 0 6px 14px rgba(25, 40, 25, 0.08);
+}
+
+.node-inputs h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.node-inputs-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.node-inputs small {
+  color: var(--muted);
+}
+
 .canvas {
   background: #fff;
   border: 1px solid #d4e1d1;
@@ -133,6 +161,7 @@ button:hover {
   position: relative;
   overflow: auto;
   padding: 12px;
+  min-height: 320px;
 }
 
 .node {
@@ -143,6 +172,7 @@ button:hover {
   border: 1px solid #a4b7a2;
   background: #fdfefd;
   box-shadow: 0 6px 16px rgba(25, 40, 25, 0.08);
+  z-index: 2;
 }
 
 .node.trigger {
@@ -151,6 +181,11 @@ button:hover {
 
 .node.action {
   border-color: #728f72;
+}
+
+.node.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .node h4 {
@@ -200,10 +235,14 @@ button:hover {
   }
 
   .workspace {
-    grid-template-rows: auto auto 260px 230px 230px;
+    grid-template-rows: auto auto 380px 230px 230px;
   }
 
   .edge-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .node-inputs-grid {
     grid-template-columns: 1fr;
   }
 }

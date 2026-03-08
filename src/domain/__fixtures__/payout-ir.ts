@@ -1,10 +1,10 @@
 import type { WorkflowIR } from '../types.js'
 
-export const payoutIRFixture: WorkflowIR = {
+export const erc20IRFixture: WorkflowIR = {
   irVersion: '1.0',
   metadata: {
-    name: 'payout-workflow',
-    description: 'Fixture for payout transfer workflow',
+    name: 'erc20-transfer-workflow',
+    description: 'Fixture for ERC20 transfer workflow',
   },
   runtime: {
     defaultTarget: 'local-simulation',
@@ -16,6 +16,19 @@ export const payoutIRFixture: WorkflowIR = {
             url: 'https://ethereum-sepolia-rpc.publicnode.com',
           },
         ],
+        receiverContract: '0x1729388a37eDC095c17C381fbe43Fb7EbeC44499',
+        chainExplorerTxBaseUrl: 'https://sepolia.etherscan.io/tx/',
+      },
+      'sepolia-broadcast': {
+        rpcs: [
+          {
+            chainName: 'ethereum-testnet-sepolia',
+            url: 'https://ethereum-sepolia-rpc.publicnode.com',
+          },
+        ],
+        broadcast: true,
+        receiverContract: '0x1729388a37eDC095c17C381fbe43Fb7EbeC44499',
+        chainExplorerTxBaseUrl: 'https://sepolia.etherscan.io/tx/',
       },
     },
   },
@@ -38,11 +51,13 @@ export const payoutIRFixture: WorkflowIR = {
     },
     {
       id: 'action_transfer_1',
-      name: 'EVM Payout Transfer',
-      type: 'evmPayoutTransfer',
+      name: 'ERC20 Transfer',
+      type: 'erc20Transfer',
       chainName: 'ethereum-testnet-sepolia',
-      receiverContract: '0x0000000000000000000000000000000000000002',
-      recipientAddress: '0x0000000000000000000000000000000000000003',
+      tokenAddress: '0xec4d762FcDCBAa1f9b37760DEe12F508c3F6b53E',
+      receiverContract: '0x1729388a37eDC095c17C381fbe43Fb7EbeC44499',
+      recipientAddress: '0xe473137d53c02A3FAEE0bC8a976a094c978d4b86',
+      tokenDecimals: 6,
       amountPath: '$outputs.action_http_1.body.number',
       gasLimit: 500000,
     },

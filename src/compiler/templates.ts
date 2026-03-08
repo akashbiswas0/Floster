@@ -41,6 +41,7 @@ function buildPipelines(ir: WorkflowIR): Record<string, string[]> {
 function generateMainTS(ir: WorkflowIR): string {
   const pipelines = buildPipelines(ir)
   const incomingMap = buildIncomingMap(ir.edges)
+  const firstTarget = ir.runtime.targets[ir.runtime.defaultTarget]
 
   return `import {
   bytesToHex,
@@ -58,50 +59,117 @@ function generateMainTS(ir: WorkflowIR): string {
   type NodeRuntime,
   type Runtime,
 } from '@chainlink/cre-sdk'
-import { decodeFunctionResult, encodeAbiParameters, encodeFunctionData, parseAbiParameters, parseUnits } from 'viem'
+import { decodeFunctionResult, encodeFunctionData, parseUnits } from 'viem'
 
 const IR = ${json(ir)} as const
 const PIPELINES = ${json(pipelines)} as const
 const INCOMING = ${json(incomingMap)} as const
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+const DEFAULT_EXPLORER_TX_BASE_URL = ${json(firstTarget?.chainExplorerTxBaseUrl ?? '')}
 
 type WorkflowContext = {
   triggerPayload: unknown
   outputs: Record<string, unknown>
 }
 
+type GeneratedRuntimeConfig = {
+  broadcast?: boolean
+  chainExplorerTxBaseUrl?: string
+  erc20Transfer?: {
+    receiverContract?: string | null
+  }
+}
+
 function deepGet(source: unknown, path: string): unknown {
-  const normalized = path.replace(/^\$\./, '').replace(/^\$/, '')
+  const trimmedPath = path.trim()
+  const normalized = trimmedPath.startsWith('$.')
+    ? trimmedPath.slice(2)
+    : trimmedPath.startsWith('$')
+      ? trimmedPath.slice(1)
+      : trimmedPath
   if (!normalized) return source
 
   let current: unknown = source
-  for (const part of normalized.split('.')) {
+  for (const part of normalized.split('.').map((segment) => segment.trim()).filter(Boolean)) {
     if (typeof current !== 'object' || current === null) return undefined
     current = (current as Record<string, unknown>)[part]
   }
   return current
 }
 
-function readRef(ref: string, runtime: Runtime<unknown>, ctx: WorkflowContext): unknown {
-  if (!ref.startsWith('$')) return ref
+function getRuntimeConfig(runtime: Runtime<unknown>): GeneratedRuntimeConfig {
+  return (((runtime as unknown as { config?: GeneratedRuntimeConfig }).config ?? {}) as GeneratedRuntimeConfig)
+}
 
-  if (ref === '$runtime.now') {
+function resolveErc20Receiver(node: any, runtime: Runtime<unknown>): string {
+  const runtimeConfig = getRuntimeConfig(runtime)
+  const runtimeReceiver = runtimeConfig.erc20Transfer?.receiverContract
+  return runtimeReceiver && runtimeReceiver.trim() ? runtimeReceiver : node.receiverContract
+}
+
+function isBroadcastRuntime(runtime: Runtime<unknown>): boolean {
+  return getRuntimeConfig(runtime).broadcast === true
+}
+
+function txStatusLabel(status: number): 'SUCCESS' | 'REVERTED' | 'FATAL' | 'UNKNOWN' {
+  if (status === 2) return 'SUCCESS'
+  if (status === 1) return 'REVERTED'
+  if (status === 0) return 'FATAL'
+  return 'UNKNOWN'
+}
+
+function receiverExecutionStatusLabel(status: unknown): 'SUCCESS' | 'REVERTED' | null {
+  if (status === 0) return 'SUCCESS'
+  if (status === 1) return 'REVERTED'
+  return null
+}
+
+function isZeroTxHash(txHash: string): boolean {
+  return /^0x0{64}$/i.test(txHash)
+}
+
+function readRef(ref: string, runtime: Runtime<unknown>, ctx: WorkflowContext): unknown {
+  const normalizedRef = ref.trim()
+
+  if (!normalizedRef.startsWith('$')) return normalizedRef
+
+  if (normalizedRef === '$runtime.now') {
     return runtime.now().toISOString()
   }
 
-  if (ref.startsWith('$trigger')) {
-    return deepGet(ctx.triggerPayload, ref.replace('$trigger', '$'))
+  if (normalizedRef.startsWith('$trigger')) {
+    return deepGet(ctx.triggerPayload, normalizedRef.replace('$trigger', '$'))
   }
 
-  if (ref.startsWith('$outputs')) {
-    const outPath = ref.replace('$outputs.', '')
-    const [nodeId, ...rest] = outPath.split('.')
-    const base = ctx.outputs[nodeId] as unknown
-    const tail = rest.length > 0 ? '$.' + rest.join('.') : '$'
+  if (normalizedRef.startsWith('$outputs')) {
+    const outPath = normalizedRef.replace('$outputs.', '')
+    const outputKeys = Object.keys(ctx.outputs).sort((a, b) => b.length - a.length)
+    const matchedKey = outputKeys.find((key) => outPath === key || outPath.startsWith(key + '.'))
+    if (!matchedKey) return undefined
+
+    const base = ctx.outputs[matchedKey] as unknown
+    const tail = outPath === matchedKey ? '$' : '$.' + outPath.slice(matchedKey.length + 1)
     return deepGet(base, tail)
   }
 
-  return ref
+  return normalizedRef
+}
+
+function summarizeAmountSource(amountPath: string, ctx: WorkflowContext): string {
+  const normalizedPath = amountPath.trim()
+  if (!normalizedPath.startsWith('$outputs.')) return ''
+
+  const path = normalizedPath.replace('$outputs.', '')
+  const outputKeys = Object.keys(ctx.outputs).sort((a, b) => b.length - a.length)
+  const matchedKey = outputKeys.find((key) => path === key || path.startsWith(key + '.'))
+  if (!matchedKey) return ''
+
+  const source = ctx.outputs[matchedKey]
+  try {
+    return JSON.stringify(source, (_, v) => (typeof v === 'bigint' ? v.toString() : v)).slice(0, 400)
+  } catch {
+    return String(source)
+  }
 }
 
 function normalizeHexPayload(value: unknown): string {
@@ -291,7 +359,31 @@ function runEvmWrite(node: any, runtime: Runtime<unknown>, ctx: WorkflowContext)
   }
 }
 
-function runEvmPayoutTransfer(node: any, runtime: Runtime<unknown>, ctx: WorkflowContext): unknown {
+const ERC20_TRANSFER_RECEIVER_ABI = [
+  {
+    type: 'function',
+    name: 'transferToken',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'token', type: 'address' },
+      { name: 'recipient', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+] as const
+
+const ERC20_BALANCE_OF_ABI = [
+  {
+    type: 'function',
+    name: 'balanceOf',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: 'balance', type: 'uint256' }],
+  },
+] as const
+
+function runErc20Transfer(node: any, runtime: Runtime<unknown>, ctx: WorkflowContext): unknown {
   const network =
     getNetwork({ chainFamily: 'evm', chainSelectorName: node.chainName, isTestnet: true }) ||
     getNetwork({ chainFamily: 'evm', chainSelectorName: node.chainName, isTestnet: false })
@@ -300,58 +392,132 @@ function runEvmPayoutTransfer(node: any, runtime: Runtime<unknown>, ctx: Workflo
     throw new Error('Network not found for ' + node.chainName)
   }
 
+  if (typeof node.tokenAddress !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(node.tokenAddress)) {
+    throw new Error('Invalid token address: ' + String(node.tokenAddress))
+  }
+
   if (typeof node.recipientAddress !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(node.recipientAddress)) {
     throw new Error('Invalid recipient address: ' + String(node.recipientAddress))
   }
 
-  if (typeof node.receiverContract !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(node.receiverContract)) {
-    throw new Error('Invalid receiver contract address: ' + String(node.receiverContract))
+  const receiverContract = resolveErc20Receiver(node, runtime)
+  if (typeof receiverContract !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(receiverContract)) {
+    throw new Error('Invalid receiver contract address: ' + String(receiverContract))
   }
 
   const amountRaw = readRef(node.amountPath, runtime, ctx)
   if (amountRaw === undefined || amountRaw === null) {
-    throw new Error('Missing payout amount at path: ' + node.amountPath)
+    throw new Error(
+      'Missing ERC20 transfer amount at path: ' +
+        node.amountPath +
+        '. Source output preview: ' +
+        summarizeAmountSource(node.amountPath, ctx),
+    )
+  }
+
+  const tokenDecimals = Number(node.tokenDecimals)
+  if (!Number.isInteger(tokenDecimals) || tokenDecimals < 0 || tokenDecimals > 36) {
+    throw new Error('Invalid token decimals: ' + String(node.tokenDecimals))
   }
 
   const amountText = String(amountRaw).trim()
-  let amountWei: bigint
+  let amountBaseUnits: bigint
   try {
-    amountWei = parseUnits(amountText, 18)
+    amountBaseUnits = parseUnits(amountText, tokenDecimals)
   } catch {
-    throw new Error('Invalid ETH amount at path ' + node.amountPath + ': ' + amountText)
+    throw new Error('Invalid token amount at path ' + node.amountPath + ': ' + amountText)
   }
 
-  if (amountWei <= 0n) {
-    throw new Error('Payout amount must be greater than zero at path ' + node.amountPath)
+  if (amountBaseUnits <= 0n) {
+    throw new Error('ERC20 transfer amount must be greater than zero at path ' + node.amountPath)
+  }
+
+  const evmClient = new cre.capabilities.EVMClient(network.chainSelector.selector)
+  if (isBroadcastRuntime(runtime)) {
+    const balanceCallData = encodeFunctionData({
+      abi: ERC20_BALANCE_OF_ABI,
+      functionName: 'balanceOf',
+      args: [receiverContract],
+    })
+
+    const balanceRaw = evmClient
+      .callContract(runtime, {
+        call: encodeCallMsg({
+          from: ZERO_ADDRESS,
+          to: node.tokenAddress,
+          data: balanceCallData,
+        }),
+      })
+      .result()
+
+    const receiverBalance = decodeFunctionResult({
+      abi: ERC20_BALANCE_OF_ABI,
+      functionName: 'balanceOf',
+      data: bytesToHex(balanceRaw.data),
+    }) as bigint
+
+    runtime.log(
+      'Broadcast balance preflight receiver=' +
+        receiverContract +
+        ' token=' +
+        node.tokenAddress +
+        ' receiverBalance=' +
+        receiverBalance.toString() +
+        ' required=' +
+        amountBaseUnits.toString(),
+    )
+
+    if (receiverBalance < amountBaseUnits) {
+      throw new Error(
+        'Receiver contract ' +
+          receiverContract +
+          ' holds ' +
+          receiverBalance.toString() +
+          ' token base units but requires ' +
+          amountBaseUnits.toString() +
+          ' for token ' +
+          node.tokenAddress,
+      )
+    }
+  } else {
+    runtime.log(
+      'Dry run mode: ERC20 transfer will not broadcast onchain. Use the Sepolia broadcast target for a real transfer.',
+    )
   }
 
   runtime.log(
-    'Preparing payout transfer receiver=' +
-      node.receiverContract +
+    'Preparing ERC20 transfer receiver=' +
+      receiverContract +
+      ' token=' +
+      node.tokenAddress +
       ' recipient=' +
       node.recipientAddress +
-      ' amountWei=' +
-      amountWei.toString(),
+      ' tokenDecimals=' +
+      String(tokenDecimals) +
+      ' amountRaw=' +
+      amountText +
+      ' amountBaseUnits=' +
+      amountBaseUnits.toString(),
   )
 
-  const reportData = encodeAbiParameters(parseAbiParameters('address recipient, uint256 amountWei'), [
-    node.recipientAddress,
-    amountWei,
-  ])
+  const callData = encodeFunctionData({
+    abi: ERC20_TRANSFER_RECEIVER_ABI,
+    functionName: 'transferToken',
+    args: [node.tokenAddress, node.recipientAddress, amountBaseUnits],
+  })
 
   const report = runtime
     .report({
-      encodedPayload: hexToBase64(reportData),
+      encodedPayload: hexToBase64(callData),
       encoderName: 'evm',
       signingAlgo: 'ecdsa',
       hashingAlgo: 'keccak256',
     })
     .result()
 
-  const evmClient = new cre.capabilities.EVMClient(network.chainSelector.selector)
   const response = evmClient
     .writeReport(runtime, {
-      receiver: node.receiverContract,
+      receiver: receiverContract,
       report,
       gasConfig: {
         gasLimit: String(node.gasLimit),
@@ -359,12 +525,36 @@ function runEvmPayoutTransfer(node: any, runtime: Runtime<unknown>, ctx: Workflo
     })
     .result()
 
+  const txHash = bytesToHex(response.txHash || new Uint8Array(32))
+  const runtimeConfig = getRuntimeConfig(runtime)
+  const txUrlBase = runtimeConfig.chainExplorerTxBaseUrl || DEFAULT_EXPLORER_TX_BASE_URL
+  const txUrl = !isZeroTxHash(txHash) && txUrlBase ? txUrlBase + txHash : undefined
+  const statusLabel = txStatusLabel(response.txStatus)
+  const receiverStatusLabel = receiverExecutionStatusLabel(response.receiverContractExecutionStatus)
+
+  if (response.txStatus === 2) {
+    runtime.log('ERC20 transfer transaction succeeded: ' + txHash)
+    if (txUrl) runtime.log('View transaction at ' + txUrl)
+  } else if (response.txStatus === 1) {
+    throw new Error('ERC20 transfer transaction reverted: ' + (response.errorMessage || 'unknown error'))
+  } else if (response.txStatus === 0) {
+    throw new Error('ERC20 transfer fatal error: ' + (response.errorMessage || 'unknown error'))
+  }
+
   return {
     txStatus: response.txStatus,
-    txHash: bytesToHex(response.txHash || new Uint8Array(32)),
+    txStatusLabel: statusLabel,
+    txHash,
+    txUrl,
     errorMessage: response.errorMessage || '',
+    receiverContractExecutionStatus: response.receiverContractExecutionStatus ?? null,
+    receiverContractExecutionStatusLabel: receiverStatusLabel,
+    receiverContract,
+    tokenAddress: node.tokenAddress,
     recipientAddress: node.recipientAddress,
-    amountWei: amountWei.toString(),
+    tokenDecimals,
+    amountRaw: amountText,
+    amountBaseUnits: amountBaseUnits.toString(),
   }
 }
 
@@ -410,8 +600,8 @@ function executeAction(
       return runEvmRead(node, runtime, ctx)
     case 'evmWrite':
       return runEvmWrite(node, runtime, ctx)
-    case 'evmPayoutTransfer':
-      return runEvmPayoutTransfer(node, runtime, ctx)
+    case 'erc20Transfer':
+      return runErc20Transfer(node, runtime, ctx)
     case 'transform':
       return runTransform(node, runtime, ctx)
     case 'consensus':
@@ -596,11 +786,24 @@ function generateTSConfig(): string {
 }
 
 function generateConfigJSON(ir: WorkflowIR, target: string): string {
+  const targetConfig = ir.runtime.targets[target]
+  const firstRpc = targetConfig?.rpcs[0]
   return json({
     generatedAt: new Date('2026-03-08T00:00:00.000Z').toISOString(),
     workflowName: ir.metadata.name,
     target,
     irVersion: ir.irVersion,
+    chainName: firstRpc?.chainName ?? null,
+    rpcUrl: firstRpc?.url ?? null,
+    broadcast: targetConfig?.broadcast ?? false,
+    chainExplorerTxBaseUrl: targetConfig?.chainExplorerTxBaseUrl ?? null,
+    evms: (targetConfig?.rpcs ?? []).map((rpc) => ({
+      chainName: rpc.chainName,
+      url: rpc.url,
+    })),
+    erc20Transfer: {
+      receiverContract: targetConfig?.receiverContract ?? null,
+    },
   })
 }
 
@@ -619,11 +822,14 @@ function generateSecretsYAML(ir: WorkflowIR): string | null {
 }
 
 function generateSimulationMetadata(ir: WorkflowIR): CompileResult['simulation'] {
-  const interactiveCommand = `cre workflow simulate . --target ${ir.runtime.defaultTarget}`
+  const target = ir.runtime.defaultTarget
+  const targetConfig = ir.runtime.targets[target]
+  const maybeBroadcast = targetConfig?.broadcast ? ' --broadcast' : ''
+  const interactiveCommand = `cre workflow simulate . --target ${target}${maybeBroadcast}`
 
   const nonInteractive: SimulationCommandMetadata[] = []
   for (const [index, trigger] of ir.triggers.entries()) {
-    let command = `cre workflow simulate . --non-interactive --trigger-index ${index} --target ${ir.runtime.defaultTarget}`
+    let command = `cre workflow simulate . --non-interactive --trigger-index ${index} --target ${target}${maybeBroadcast}`
 
     if (trigger.type === 'http') {
       command += ` --http-payload @./payloads/${trigger.id}.json`

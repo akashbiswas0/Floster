@@ -99,7 +99,7 @@ function countReachableActionsByType(ir: WorkflowIR, actionType: ActionNode['typ
 }
 
 function countEvmWriteLikeActions(ir: WorkflowIR): number {
-  return ir.actions.filter((action) => action.type === 'evmWrite' || action.type === 'evmPayoutTransfer')
+  return ir.actions.filter((action) => action.type === 'evmWrite' || action.type === 'erc20Transfer')
     .length
 }
 
@@ -150,7 +150,7 @@ export function runPreflight(ir: WorkflowIR): PreflightResult {
 
   for (const action of ir.actions) {
     if (
-      (action.type === 'evmWrite' || action.type === 'evmPayoutTransfer') &&
+      (action.type === 'evmWrite' || action.type === 'erc20Transfer') &&
       action.gasLimit > CRE_QUOTAS.evmWriteGasLimit
     ) {
       diagnostics.push({

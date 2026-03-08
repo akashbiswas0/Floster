@@ -1,3 +1,94 @@
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+const SEPOLIA_RPC_URL = 'https://ethereum-sepolia-rpc.publicnode.com'
+const SEPOLIA_CHAIN_NAME = 'ethereum-testnet-sepolia'
+const SEPOLIA_SIMULATION_RECEIVER = '0x1729388a37eDC095c17C381fbe43Fb7EbeC44499'
+const SEPOLIA_PRODUCTION_RECEIVER = '0x7578EbC461DfBC93c2e5Ce93a55163D5fD7D1c91'
+const DEFAULT_TOKEN_ADDRESS = '0xec4d762FcDCBAa1f9b37760DEe12F508c3F6b53E'
+const DEFAULT_TOKEN_DECIMALS = 6
+const DEFAULT_RECIPIENT_ADDRESS = '0xe473137d53c02A3FAEE0bC8a976a094c978d4b86'
+
+function buildDefaultTargets() {
+  return {
+    'local-simulation': {
+      rpcs: [{ chainName: SEPOLIA_CHAIN_NAME, url: SEPOLIA_RPC_URL }],
+      broadcast: false,
+      receiverContract: SEPOLIA_SIMULATION_RECEIVER,
+      chainExplorerTxBaseUrl: 'https://sepolia.etherscan.io/tx/',
+    },
+    'sepolia-broadcast': {
+      rpcs: [{ chainName: SEPOLIA_CHAIN_NAME, url: SEPOLIA_RPC_URL }],
+      broadcast: true,
+      receiverContract: SEPOLIA_SIMULATION_RECEIVER,
+      chainExplorerTxBaseUrl: 'https://sepolia.etherscan.io/tx/',
+    },
+    'sepolia-production': {
+      rpcs: [{ chainName: SEPOLIA_CHAIN_NAME, url: SEPOLIA_RPC_URL }],
+      broadcast: false,
+      receiverContract: SEPOLIA_PRODUCTION_RECEIVER,
+      chainExplorerTxBaseUrl: 'https://sepolia.etherscan.io/tx/',
+    },
+  }
+}
+
+function ensureRuntimeTargets(runtime) {
+  const defaults = buildDefaultTargets()
+  const next = runtime && typeof runtime === 'object' ? structuredClone(runtime) : { defaultTarget: 'local-simulation', targets: {} }
+  next.defaultTarget = typeof next.defaultTarget === 'string' ? next.defaultTarget : 'local-simulation'
+  next.targets = next.targets && typeof next.targets === 'object' ? next.targets : {}
+
+  for (const [target, cfg] of Object.entries(defaults)) {
+    const current = next.targets[target]
+    if (!current || typeof current !== 'object') {
+      next.targets[target] = structuredClone(cfg)
+      continue
+    }
+
+    if (!Array.isArray(current.rpcs) || current.rpcs.length === 0) {
+      current.rpcs = structuredClone(cfg.rpcs)
+    }
+    if (typeof current.broadcast !== 'boolean') current.broadcast = cfg.broadcast
+    if (typeof current.receiverContract !== 'string') current.receiverContract = cfg.receiverContract
+    if (typeof current.chainExplorerTxBaseUrl !== 'string') {
+      current.chainExplorerTxBaseUrl = cfg.chainExplorerTxBaseUrl
+    }
+  }
+
+  return next
+}
+
+function normalizeLocalIR(input) {
+  if (!input || typeof input !== 'object') return input
+  const next = structuredClone(input)
+  next.runtime = ensureRuntimeTargets(next.runtime)
+
+  if (Array.isArray(next.actions)) {
+    for (const action of next.actions) {
+      if (!action || typeof action !== 'object') continue
+      if (action.type === 'erc20Transfer') {
+        if (typeof action.tokenAddress !== 'string') action.tokenAddress = DEFAULT_TOKEN_ADDRESS
+        if (typeof action.receiverContract !== 'string') {
+          action.receiverContract = next.runtime.targets[next.runtime.defaultTarget]?.receiverContract || SEPOLIA_SIMULATION_RECEIVER
+        }
+        if (!Number.isInteger(action.tokenDecimals)) action.tokenDecimals = DEFAULT_TOKEN_DECIMALS
+        continue
+      }
+      if (action.type !== 'evmPayoutTransfer') continue
+
+      action.type = 'erc20Transfer'
+      if (typeof action.name === 'string' && action.name.toLowerCase().includes('payout')) {
+        action.name = 'ERC20 Transfer'
+      }
+      if (typeof action.tokenAddress !== 'string') action.tokenAddress = DEFAULT_TOKEN_ADDRESS
+      if (typeof action.receiverContract !== 'string') {
+        action.receiverContract = next.runtime.targets[next.runtime.defaultTarget]?.receiverContract || SEPOLIA_SIMULATION_RECEIVER
+      }
+      if (!Number.isInteger(action.tokenDecimals)) action.tokenDecimals = DEFAULT_TOKEN_DECIMALS
+    }
+  }
+
+  return next
+}
+
 const defaultIR = {
   irVersion: '1.0',
   metadata: {
@@ -6,16 +97,7 @@ const defaultIR = {
   },
   runtime: {
     defaultTarget: 'local-simulation',
-    targets: {
-      'local-simulation': {
-        rpcs: [
-          {
-            chainName: 'ethereum-testnet-sepolia',
-            url: 'https://ethereum-sepolia-rpc.publicnode.com',
-          },
-        ],
-      },
-    },
+    targets: buildDefaultTargets(),
   },
   triggers: [
     {
@@ -36,11 +118,13 @@ const defaultIR = {
     },
     {
       id: 'action_transfer_1',
-      name: 'EVM Payout Transfer',
-      type: 'evmPayoutTransfer',
-      chainName: 'ethereum-testnet-sepolia',
-      receiverContract: '0x0000000000000000000000000000000000000002',
-      recipientAddress: '0x0000000000000000000000000000000000000003',
+      name: 'ERC20 Transfer',
+      type: 'erc20Transfer',
+      chainName: SEPOLIA_CHAIN_NAME,
+      tokenAddress: DEFAULT_TOKEN_ADDRESS,
+      receiverContract: SEPOLIA_SIMULATION_RECEIVER,
+      recipientAddress: DEFAULT_RECIPIENT_ADDRESS,
+      tokenDecimals: DEFAULT_TOKEN_DECIMALS,
       amountPath: '$outputs.action_http_1.body.number',
       gasLimit: 500000,
     },
@@ -58,12 +142,68 @@ const outputEl = document.getElementById('output')
 const edgeFrom = document.getElementById('edge-from')
 const edgeTo = document.getElementById('edge-to')
 const canvas = document.getElementById('canvas')
-const defaultUrlInput = document.getElementById('default-url')
-const defaultRecipientInput = document.getElementById('default-recipient')
-const defaultReceiverContractInput = document.getElementById('default-receiver-contract')
+const nodeInputsEl = document.getElementById('node-inputs')
+const simulateModeEl = document.getElementById('simulate-mode')
+let selectedNodeId = null
 
 function writeOutput(title, data) {
   outputEl.textContent = `${title}\n\n${typeof data === 'string' ? data : JSON.stringify(data, null, 2)}`
+}
+
+function currentSimulationTarget() {
+  return simulateModeEl?.value || ir.runtime.defaultTarget || 'local-simulation'
+}
+
+function currentSimulationMeta() {
+  const target = currentSimulationTarget()
+  const targetConfig = ir.runtime.targets[target] || buildDefaultTargets()[target]
+  return {
+    target,
+    broadcast: targetConfig?.broadcast === true,
+    receiverContract:
+      targetConfig?.receiverContract ||
+      ir.actions.find((action) => action.type === 'erc20Transfer')?.receiverContract ||
+      '',
+  }
+}
+
+function formatSimulationResponse(response) {
+  const meta = currentSimulationMeta()
+  const transferOutput = response?.simulation?.result?.outputs
+    ? Object.values(response.simulation.result.outputs).find(
+        (value) => value && typeof value === 'object' && 'txStatus' in value,
+      )
+    : null
+
+  const summary = [
+    `Mode: ${meta.broadcast ? 'Broadcast to Sepolia' : 'Dry Run'}`,
+    `Target: ${meta.target}`,
+    `Receiver: ${meta.receiverContract || '(not resolved)'}`,
+    `Command: ${response?.simulation?.command || '(not run)'}`,
+  ]
+
+  if (transferOutput && typeof transferOutput === 'object') {
+    const txHash = transferOutput.txHash
+    const txStatusLabel = transferOutput.txStatusLabel
+    const txUrl = transferOutput.txUrl
+    if (txStatusLabel) summary.push(`Write Status: ${txStatusLabel}`)
+    if (txHash) summary.push(`Tx Hash: ${txHash}`)
+    if (txUrl) summary.push(`Explorer: ${txUrl}`)
+  }
+
+  if (!meta.broadcast) {
+    summary.push('Dry run keeps the onchain write simulated. Choose Broadcast to Sepolia for a real transaction.')
+  }
+
+  return `${summary.join('\n')}\n\n${JSON.stringify(response, null, 2)}`
+}
+
+function updateSelectionText() {
+  const node = selectedNodeId ? findNodeById(selectedNodeId) : null
+  const text = node
+    ? `Selected ${node.id} (${node.type})`
+    : 'Select a node and connect using Edge controls.'
+  document.getElementById('selection').textContent = text
 }
 
 function syncJSON() {
@@ -72,41 +212,113 @@ function syncJSON() {
 
 function syncFromJSON() {
   try {
-    ir = JSON.parse(jsonText.value)
+    ir = normalizeLocalIR(JSON.parse(jsonText.value))
     render()
   } catch (error) {
     writeOutput('JSON parse error', error.message)
   }
 }
 
-function findAction(type) {
-  return ir.actions.find((action) => action.type === type)
+function findNodeById(nodeId) {
+  return allNodes().find((node) => node.id === nodeId)
 }
 
-function syncDefaultInputsFromIR() {
-  const fetchNode = findAction('httpFetch')
-  if (fetchNode && defaultUrlInput) {
-    defaultUrlInput.value = fetchNode.url
+function editableFieldsForNode(node) {
+  if (node.type === 'cron') {
+    return [{ key: 'schedule', label: 'Schedule', input: 'text' }]
   }
 
-  const transferNode = findAction('evmPayoutTransfer')
-  if (transferNode && defaultRecipientInput && defaultReceiverContractInput) {
-    defaultRecipientInput.value = transferNode.recipientAddress
-    defaultReceiverContractInput.value = transferNode.receiverContract
+  if (node.type === 'httpFetch') {
+    return [
+      { key: 'url', label: 'URL', input: 'text' },
+      { key: 'method', label: 'Method', input: 'select', options: ['GET', 'POST'] },
+      { key: 'consensus', label: 'Consensus', input: 'select', options: ['identical', 'median'] },
+    ]
   }
+
+  if (node.type === 'erc20Transfer') {
+    return [
+      { key: 'tokenAddress', label: 'Token Address', input: 'text' },
+      { key: 'recipientAddress', label: 'Recipient Address', input: 'text' },
+      { key: 'tokenDecimals', label: 'Token Decimals', input: 'number' },
+      { key: 'chainName', label: 'Chain Name', input: 'text' },
+      { key: 'gasLimit', label: 'Gas Limit', input: 'number' },
+      { key: 'amountPath', label: 'Amount Path', input: 'text' },
+    ]
+  }
+
+  if (node.type === 'evmWrite') {
+    return [
+      { key: 'receiver', label: 'Receiver', input: 'text' },
+      { key: 'chainName', label: 'Chain Name', input: 'text' },
+      { key: 'gasLimit', label: 'Gas Limit', input: 'number' },
+      { key: 'payloadPath', label: 'Payload Path', input: 'text' },
+    ]
+  }
+
+  if (node.type === 'evmRead') {
+    return [
+      { key: 'contractAddress', label: 'Contract Address', input: 'text' },
+      { key: 'functionName', label: 'Function', input: 'text' },
+      { key: 'chainName', label: 'Chain Name', input: 'text' },
+    ]
+  }
+
+  return []
 }
 
-function applyDefaultInputsToIR() {
-  const fetchNode = findAction('httpFetch')
-  if (fetchNode && defaultUrlInput) {
-    fetchNode.url = defaultUrlInput.value.trim()
+function renderNodeInputs() {
+  if (!nodeInputsEl) return
+  const node = selectedNodeId ? findNodeById(selectedNodeId) : null
+
+  if (!node) {
+    nodeInputsEl.innerHTML = '<h3>Node Inputs</h3><small>Select a node on canvas to edit its required inputs.</small>'
+    return
   }
 
-  const transferNode = findAction('evmPayoutTransfer')
-  if (transferNode && defaultRecipientInput && defaultReceiverContractInput) {
-    transferNode.recipientAddress = defaultRecipientInput.value.trim()
-    transferNode.receiverContract = defaultReceiverContractInput.value.trim()
+  const fields = editableFieldsForNode(node)
+  if (fields.length === 0) {
+    nodeInputsEl.innerHTML = `<h3>Node Inputs</h3><small>No editable input fields for ${node.id} (${node.type}).</small>`
+    return
   }
+
+  const controls = fields
+    .map((field) => {
+      const value = node[field.key]
+      if (field.input === 'select') {
+        const options = field.options
+          .map((opt) => `<option value="${opt}"${String(value) === opt ? ' selected' : ''}>${opt}</option>`)
+          .join('')
+        return `<label class="field-label">${field.label}<select data-node-input="${field.key}">${options}</select></label>`
+      }
+
+      const type = field.input === 'number' ? 'number' : 'text'
+      return `<label class="field-label">${field.label}<input data-node-input="${field.key}" type="${type}" value="${value ?? ''}" /></label>`
+    })
+    .join('')
+
+  const note =
+    node.type === 'erc20Transfer'
+      ? `<small>Receiver contract is derived from the selected simulation mode and hidden from normal editing.</small>`
+      : ''
+
+  nodeInputsEl.innerHTML = `<h3>Node Inputs: ${node.name}</h3><div class="node-inputs-grid">${controls}</div>${note}`
+
+  nodeInputsEl.querySelectorAll('[data-node-input]').forEach((el) => {
+    el.addEventListener('input', () => {
+      const key = el.getAttribute('data-node-input')
+      const targetNode = findNodeById(selectedNodeId)
+      if (!targetNode || !key) return
+
+      if (el.type === 'number') {
+        const next = Number.parseInt(el.value, 10)
+        if (!Number.isNaN(next)) targetNode[key] = next
+      } else {
+        targetNode[key] = el.value
+      }
+      syncJSON()
+    })
+  })
 }
 
 function allNodes() {
@@ -127,6 +339,7 @@ function drawEdges(nodesById) {
   svg.style.inset = '0'
   svg.style.width = '100%'
   svg.style.height = '100%'
+  svg.style.pointerEvents = 'none'
 
   for (const edge of ir.edges) {
     const from = nodesById.get(edge.from)
@@ -148,12 +361,25 @@ function drawEdges(nodesById) {
 }
 
 function render() {
-  canvas.innerHTML = ''
+  if (simulateModeEl) {
+    simulateModeEl.value = ir.runtime.defaultTarget || 'local-simulation'
+  }
+  for (const child of Array.from(canvas.children)) {
+    if (child !== nodeInputsEl) {
+      child.remove()
+    }
+  }
+  if (nodeInputsEl && nodeInputsEl.parentElement !== canvas) {
+    canvas.appendChild(nodeInputsEl)
+  }
   refreshEdgeSelectors()
-  syncDefaultInputsFromIR()
   syncJSON()
 
   const nodes = allNodes()
+  if (!selectedNodeId || !nodes.some((node) => node.id === selectedNodeId)) {
+    selectedNodeId = nodes[0]?.id ?? null
+  }
+  updateSelectionText()
   const nodesById = new Map()
 
   let triggerIndex = 0
@@ -163,6 +389,9 @@ function render() {
     const div = document.createElement('div')
     const isTrigger = ['cron', 'http', 'evmLog'].includes(node.type)
     div.className = `node ${isTrigger ? 'trigger' : 'action'}`
+    if (node.id === selectedNodeId) {
+      div.classList.add('selected')
+    }
 
     const x = isTrigger ? 16 : 290 + (actionIndex % 3) * 220
     const y = isTrigger ? 16 + triggerIndex * 90 : 16 + Math.floor(actionIndex / 3) * 100
@@ -176,7 +405,10 @@ function render() {
     div.innerHTML = `<h4>${node.name}</h4><p>${node.id} · ${node.type}</p>`
 
     div.addEventListener('click', () => {
-      document.getElementById('selection').textContent = `Selected ${node.id} (${node.type})`
+      selectedNodeId = node.id
+      updateSelectionText()
+      renderNodeInputs()
+      render()
     })
 
     nodesById.set(node.id, { x, y })
@@ -184,6 +416,7 @@ function render() {
   }
 
   drawEdges(nodesById)
+  renderNodeInputs()
 }
 
 function makeNode(type) {
@@ -203,7 +436,7 @@ function makeNode(type) {
       id,
       name: 'EVM Log Trigger',
       type: 'evmLog',
-      chainName: 'ethereum-testnet-sepolia',
+      chainName: SEPOLIA_CHAIN_NAME,
       addresses: ['0x0000000000000000000000000000000000000001'],
     }
   }
@@ -224,7 +457,7 @@ function makeNode(type) {
       id,
       name: 'EVM Read',
       type: 'evmRead',
-      chainName: 'ethereum-testnet-sepolia',
+      chainName: SEPOLIA_CHAIN_NAME,
       contractAddress: '0x0000000000000000000000000000000000000001',
       functionName: 'totalSupply',
       inputs: [],
@@ -239,21 +472,23 @@ function makeNode(type) {
       id,
       name: 'EVM Write',
       type: 'evmWrite',
-      chainName: 'ethereum-testnet-sepolia',
+      chainName: SEPOLIA_CHAIN_NAME,
       receiver: '0x0000000000000000000000000000000000000002',
       payloadPath: '$outputs.action_1',
       gasLimit: 300000,
     }
   }
 
-  if (type === 'evmPayoutTransfer') {
+  if (type === 'erc20Transfer') {
     return {
       id,
-      name: 'EVM Payout Transfer',
-      type: 'evmPayoutTransfer',
-      chainName: 'ethereum-testnet-sepolia',
-      receiverContract: defaultReceiverContractInput?.value.trim() || '0x0000000000000000000000000000000000000002',
-      recipientAddress: defaultRecipientInput?.value.trim() || '0x0000000000000000000000000000000000000003',
+      name: 'ERC20 Transfer',
+      type: 'erc20Transfer',
+      chainName: SEPOLIA_CHAIN_NAME,
+      tokenAddress: DEFAULT_TOKEN_ADDRESS,
+      receiverContract: currentSimulationMeta().receiverContract || SEPOLIA_SIMULATION_RECEIVER,
+      recipientAddress: DEFAULT_RECIPIENT_ADDRESS,
+      tokenDecimals: DEFAULT_TOKEN_DECIMALS,
       amountPath: '$outputs.action_http_1.body.number',
       gasLimit: 500000,
     }
@@ -299,13 +534,20 @@ document.querySelectorAll('[data-node]').forEach((btn) => {
   })
 })
 
-document.getElementById('add-edge').addEventListener('click', () => {
-  ir.edges.push({ from: edgeFrom.value, to: edgeTo.value })
+simulateModeEl?.addEventListener('change', () => {
+  ir.runtime = ensureRuntimeTargets(ir.runtime)
+  ir.runtime.defaultTarget = simulateModeEl.value
+  const receiver = currentSimulationMeta().receiverContract
+  for (const action of ir.actions) {
+    if (action.type === 'erc20Transfer') {
+      action.receiverContract = receiver
+    }
+  }
   render()
 })
 
-document.getElementById('apply-default-inputs').addEventListener('click', () => {
-  applyDefaultInputsToIR()
+document.getElementById('add-edge').addEventListener('click', () => {
+  ir.edges.push({ from: edgeFrom.value, to: edgeTo.value })
   render()
 })
 
@@ -314,10 +556,10 @@ jsonText.addEventListener('change', syncFromJSON)
 document.getElementById('validate-btn').addEventListener('click', async () => {
   try {
     syncFromJSON()
-    applyDefaultInputsToIR()
-    syncJSON()
     const res = await postJSON('/api/validate', ir)
+    if (res.ir) ir = normalizeLocalIR(res.ir)
     writeOutput('Validation + preflight', res)
+    render()
   } catch (error) {
     writeOutput('Validation failed', error.message)
   }
@@ -326,8 +568,6 @@ document.getElementById('validate-btn').addEventListener('click', async () => {
 document.getElementById('compile-btn').addEventListener('click', async () => {
   try {
     syncFromJSON()
-    applyDefaultInputsToIR()
-    syncJSON()
     const res = await postJSON('/api/compile', { ir })
     writeOutput('Compile success', res)
   } catch (error) {
@@ -338,16 +578,16 @@ document.getElementById('compile-btn').addEventListener('click', async () => {
 document.getElementById('simulate-btn').addEventListener('click', async () => {
   try {
     syncFromJSON()
-    applyDefaultInputsToIR()
-    syncJSON()
+    const simulationMeta = currentSimulationMeta()
     const res = await postJSON('/api/simulate', {
       ir,
       autoCompile: true,
       workflowPath: './generated/' + ir.metadata.name,
-      target: ir.runtime.defaultTarget,
+      target: simulationMeta.target,
+      broadcast: simulationMeta.broadcast,
       triggerInput: { mode: 'interactive' },
     })
-    writeOutput('Simulation', res)
+    writeOutput('Simulation', formatSimulationResponse(res))
   } catch (error) {
     writeOutput('Simulation failed', error.message)
   }
@@ -363,10 +603,10 @@ document.getElementById('generate-ai').addEventListener('click', async () => {
 
     const res = await postJSON('/api/ai/generate', {
       prompt,
-      context: { targetName: ir.runtime.defaultTarget },
+      context: { targetName: currentSimulationTarget() },
     })
 
-    ir = res.ir
+    ir = normalizeLocalIR(res.ir)
     render()
     writeOutput('AI generate', res)
   } catch (error) {
@@ -387,7 +627,7 @@ document.getElementById('repair-btn').addEventListener('click', async () => {
       diagnostics: validated.diagnostics || [],
     })
 
-    ir = res.ir
+    ir = normalizeLocalIR(res.ir)
     render()
     writeOutput('AI repair', res)
   } catch (error) {
@@ -395,4 +635,5 @@ document.getElementById('repair-btn').addEventListener('click', async () => {
   }
 })
 
+ir = normalizeLocalIR(ir)
 render()

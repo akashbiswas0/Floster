@@ -8,6 +8,10 @@ import type { Diagnostic, SimulationRequest, SimulationResult } from '../domain/
 function buildArgs(req: SimulationRequest): string[] {
   const args = ['workflow', 'simulate', req.workflowPath, '--target', req.target]
 
+  if (req.broadcast) {
+    args.push('--broadcast')
+  }
+
   if (req.triggerInput.mode === 'interactive') {
     return args
   }
@@ -55,6 +59,21 @@ async function exists(filePath: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+async function resolveCreBinary(workflowPath: string): Promise<string> {
+  const direct = await runCommand('cre', ['version'], workflowPath)
+  if (direct === 0) {
+    return 'cre'
+  }
+
+  if (process.env.CRE_INSTALL) {
+    return path.join(process.env.CRE_INSTALL, 'bin', 'cre')
+  }
+  if (process.env.HOME) {
+    return path.join(process.env.HOME, '.cre', 'bin', 'cre')
+  }
+  return 'cre'
 }
 
 async function runCommand(bin: string, args: string[], cwd: string): Promise<number> {
@@ -224,7 +243,7 @@ export async function simulateWorkflow(
   const logs: Array<{ level: 'stdout' | 'stderr'; line: string }> = []
   pushDebug(
     logs,
-    `simulate request: workflowPath=${request.workflowPath}, target=${request.target}, mode=${request.triggerInput.mode}`,
+    `simulate request: workflowPath=${request.workflowPath}, target=${request.target}, broadcast=${request.broadcast === true}, mode=${request.triggerInput.mode}`,
   )
 
   const fileChecks = await Promise.all([
@@ -240,7 +259,10 @@ export async function simulateWorkflow(
     `workflow files: project.yaml=${fileChecks[0]}, workflow.yaml=${fileChecks[1]}, .env=${fileChecks[2]}, .env.example=${fileChecks[3]}, package.json=${fileChecks[4]}, cre-compile=${fileChecks[5]}`,
   )
 
-  const checks = await runOnboardingChecks(request.workflowPath)
+  const checks = await runOnboardingChecks(request.workflowPath, {
+    ...(request.target ? { target: request.target } : {}),
+    ...(request.broadcast !== undefined ? { broadcast: request.broadcast } : {}),
+  })
   if (checks.length > 0) {
     for (const diag of checks) {
       pushDebug(logs, `onboarding ${diag.severity} ${diag.code}: ${diag.message}`)
@@ -274,11 +296,12 @@ export async function simulateWorkflow(
   const args = buildArgs(request)
   const command = `cre ${args.join(' ')}`
   pushDebug(logs, `executing command: ${command}`)
+  const creBin = await resolveCreBinary(request.workflowPath)
 
   const runId = crypto.randomUUID()
 
   const exitCode = await new Promise<number>((resolve) => {
-    const child = spawn('cre', args, {
+    const child = spawn(creBin, args, {
       cwd: request.workflowPath,
       env: process.env,
     })

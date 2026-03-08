@@ -9,15 +9,17 @@ describe('IR validation + lint + preflight', () => {
     expect(result.valid).toBe(true)
   })
 
-  it('accepts evmPayoutTransfer action shape', () => {
+  it('accepts erc20Transfer action shape', () => {
     const ir = structuredClone(validIRFixture)
     ir.actions.push({
       id: 'action_transfer_1',
-      name: 'Transfer',
-      type: 'evmPayoutTransfer',
+      name: 'ERC20 Transfer',
+      type: 'erc20Transfer',
       chainName: 'ethereum-testnet-sepolia',
-      receiverContract: '0x0000000000000000000000000000000000000002',
+      tokenAddress: '0x0000000000000000000000000000000000000001',
+      receiverContract: '0x1729388a37eDC095c17C381fbe43Fb7EbeC44499',
       recipientAddress: '0x0000000000000000000000000000000000000003',
+      tokenDecimals: 18,
       amountPath: '$outputs.action_1.body.number',
       gasLimit: 500000,
     })
@@ -27,15 +29,17 @@ describe('IR validation + lint + preflight', () => {
     expect(result.valid).toBe(true)
   })
 
-  it('rejects evmPayoutTransfer with invalid recipient address', () => {
+  it('rejects erc20Transfer with invalid recipient address', () => {
     const ir = structuredClone(validIRFixture)
     ir.actions.push({
       id: 'action_transfer_1',
-      name: 'Transfer',
-      type: 'evmPayoutTransfer',
+      name: 'ERC20 Transfer',
+      type: 'erc20Transfer',
       chainName: 'ethereum-testnet-sepolia',
-      receiverContract: '0x0000000000000000000000000000000000000002',
+      tokenAddress: '0x0000000000000000000000000000000000000001',
+      receiverContract: '0x1729388a37eDC095c17C381fbe43Fb7EbeC44499',
       recipientAddress: 'not-an-address',
+      tokenDecimals: 18,
       amountPath: '$outputs.action_1.body.number',
       gasLimit: 500000,
     })
@@ -43,6 +47,25 @@ describe('IR validation + lint + preflight', () => {
 
     const result = validateIR(ir)
     expect(result.valid).toBe(false)
+  })
+
+  it('normalizes legacy evmPayoutTransfer shape', () => {
+    const ir = structuredClone(validIRFixture) as any
+    ir.actions.push({
+      id: 'action_transfer_1',
+      name: 'EVM Payout Transfer',
+      type: 'evmPayoutTransfer',
+      chainName: 'ethereum-testnet-sepolia',
+      receiverContract: '0x1729388a37eDC095c17C381fbe43Fb7EbeC44499',
+      recipientAddress: '0x0000000000000000000000000000000000000003',
+      amountPath: '$outputs.action_1.body.number',
+      gasLimit: 500000,
+    })
+    ir.edges.push({ from: 'action_1', to: 'action_transfer_1' })
+
+    const result = validateIR(ir)
+    expect(result.valid).toBe(true)
+    expect(result.diagnostics.some((d) => d.code === 'IR_LEGACY_PAYOUT_NORMALIZED')).toBe(true)
   })
 
   it('rejects non-deterministic Date.now usage', () => {

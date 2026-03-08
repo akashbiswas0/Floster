@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/server.ts",
+    "mock:amount-server": "node scripts/mock-amount-server.mjs",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:contracts": "forge test --root contracts"
   },
   "dependencies": {
     "ajv": "^8.17.1",

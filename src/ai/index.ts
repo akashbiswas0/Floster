@@ -1,5 +1,12 @@
 import { compileIR } from '../compiler/index.js'
 import { runDeterminismLint, runPreflight } from '../domain/lint.js'
+import { normalizeWorkflowIR } from '../domain/normalize.js'
+import {
+  buildDefaultRuntime,
+  SEPOLIA_CHAIN_NAME,
+  SEPOLIA_SIMULATION_RECEIVER,
+  ZERO_ADDRESS,
+} from '../domain/targets.js'
 import { validateIR } from '../domain/validate.js'
 import type { Diagnostic, WorkflowIR } from '../domain/types.js'
 import { CRE_TEMPLATE_SNIPPETS, type TemplateSnippet } from './template-snippets.js'
@@ -50,21 +57,14 @@ function detectIntent(prompt: string): 'cron' | 'http' | 'evmLog' {
 
 function defaultRuntime(targetName?: string, preferredChain?: string): WorkflowIR['runtime'] {
   const target = targetName ?? 'local-simulation'
-  const chain = preferredChain ?? 'ethereum-testnet-sepolia'
+  const chain = preferredChain ?? SEPOLIA_CHAIN_NAME
+  const runtime = buildDefaultRuntime(target)
 
-  return {
-    defaultTarget: target,
-    targets: {
-      [target]: {
-        rpcs: [
-          {
-            chainName: chain,
-            url: 'https://ethereum-sepolia-rpc.publicnode.com',
-          },
-        ],
-      },
-    },
+  for (const cfg of Object.values(runtime.targets)) {
+    cfg.rpcs = [{ chainName: chain, url: cfg.rpcs[0]?.url ?? 'https://ethereum-sepolia-rpc.publicnode.com' }]
   }
+
+  return runtime
 }
 
 function buildHeuristicIR(input: GenerateIRInput): WorkflowIR {
@@ -162,6 +162,23 @@ function buildHeuristicIR(input: GenerateIRInput): WorkflowIR {
     ir.edges.push({ from: transformId, to: 'action_write_1' })
   }
 
+  if (prompt.toLowerCase().includes('erc20') || prompt.toLowerCase().includes('token transfer')) {
+    ir.actions.push({
+      id: 'action_transfer_1',
+      name: 'ERC20 Transfer',
+      type: 'erc20Transfer',
+      chainName: preferredChain ?? SEPOLIA_CHAIN_NAME,
+      tokenAddress: ZERO_ADDRESS,
+      receiverContract: SEPOLIA_SIMULATION_RECEIVER,
+      recipientAddress: '0x0000000000000000000000000000000000000003',
+      tokenDecimals: 18,
+      amountPath: '$outputs.action_http_1.body.number',
+      gasLimit: 500000,
+    })
+
+    ir.edges.push({ from: fetchId, to: 'action_transfer_1' })
+  }
+
   return ir
 }
 
@@ -225,10 +242,11 @@ export async function generateIR(input: GenerateIRInput): Promise<AIResult> {
   const snippets = rankSnippets(input.prompt)
   const seedIR = buildHeuristicIR(input)
   const repaired = await runAutoRepair(seedIR)
+  const normalized = normalizeWorkflowIR(repaired.ir)
 
   return {
-    ir: repaired.ir,
-    diagnostics: repaired.diagnostics,
+    ir: normalized.ir,
+    diagnostics: [...normalized.diagnostics, ...repaired.diagnostics],
     snippets,
   }
 }
@@ -237,12 +255,14 @@ export async function repairIR(
   ir: WorkflowIR,
   incomingDiagnostics: Diagnostic[],
 ): Promise<AIResult> {
-  const fixed = fixKnownIssues(ir, incomingDiagnostics)
+  const initial = normalizeWorkflowIR(ir)
+  const fixed = fixKnownIssues(initial.ir, incomingDiagnostics)
   const repaired = await runAutoRepair(fixed)
+  const normalized = normalizeWorkflowIR(repaired.ir)
 
   return {
-    ir: repaired.ir,
-    diagnostics: repaired.diagnostics,
+    ir: normalized.ir,
+    diagnostics: [...initial.diagnostics, ...normalized.diagnostics, ...repaired.diagnostics],
     snippets: [],
   }
 }

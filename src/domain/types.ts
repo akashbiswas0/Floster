@@ -7,7 +7,7 @@ export type ActionType =
   | 'httpFetch'
   | 'evmRead'
   | 'evmWrite'
-  | 'evmPayoutTransfer'
+  | 'erc20Transfer'
   | 'transform'
   | 'consensus'
 
@@ -19,6 +19,9 @@ export interface RPCConfig {
 export interface TargetConfig {
   rpcs: RPCConfig[]
   workflowOwnerAddress?: string
+  broadcast?: boolean
+  receiverContract?: string
+  chainExplorerTxBaseUrl?: string
 }
 
 export interface RuntimeConfig {
@@ -83,11 +86,13 @@ export interface EvmWriteActionNode extends BaseNode {
   gasLimit: number
 }
 
-export interface EvmPayoutTransferActionNode extends BaseNode {
-  type: 'evmPayoutTransfer'
+export interface Erc20TransferActionNode extends BaseNode {
+  type: 'erc20Transfer'
   chainName: string
+  tokenAddress: string
   receiverContract: string
   recipientAddress: string
+  tokenDecimals: number
   amountPath: string
   gasLimit: number
 }
@@ -109,7 +114,7 @@ export type ActionNode =
   | HttpFetchActionNode
   | EvmReadActionNode
   | EvmWriteActionNode
-  | EvmPayoutTransferActionNode
+  | Erc20TransferActionNode
   | TransformActionNode
   | ConsensusActionNode
 
@@ -175,6 +180,7 @@ export interface CompileResult {
 export interface SimulationRequest {
   workflowPath: string
   target: string
+  broadcast?: boolean
   triggerInput:
     | { mode: 'interactive' }
     | { mode: 'cron'; triggerIndex: number }

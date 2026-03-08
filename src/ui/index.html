@@ -10,24 +10,7 @@
     <main class="app-shell">
       <aside class="sidebar">
         <h1>CRE Builder</h1>
-        <p class="muted">Local simulation only</p>
-
-        <section class="panel">
-          <h2>Default Payout Inputs</h2>
-          <label class="field-label"
-            >HTTP URL
-            <input id="default-url" type="text" value="http://localhost:3002/random" />
-          </label>
-          <label class="field-label"
-            >Recipient (EOA)
-            <input id="default-recipient" type="text" value="0x0000000000000000000000000000000000000003" />
-          </label>
-          <label class="field-label"
-            >Receiver Contract
-            <input id="default-receiver-contract" type="text" value="0x0000000000000000000000000000000000000002" />
-          </label>
-          <button id="apply-default-inputs">Apply To Default Flow</button>
-        </section>
+        <p class="muted">Dry run or Sepolia broadcast</p>
 
         <section class="panel">
           <h2>Node Palette</h2>
@@ -38,7 +21,7 @@
             <button data-node="httpFetch">+ HTTP Fetch</button>
             <button data-node="evmRead">+ EVM Read</button>
             <button data-node="evmWrite">+ EVM Write</button>
-            <button data-node="evmPayoutTransfer">+ EVM Payout Transfer</button>
+            <button data-node="erc20Transfer">+ ERC20 Transfer</button>
             <button data-node="transform">+ Transform</button>
             <button data-node="consensus">+ Consensus</button>
           </div>
@@ -52,6 +35,13 @@
 
         <section class="panel">
           <h2>Actions</h2>
+          <label class="field-label">
+            Simulation Mode
+            <select id="simulate-mode">
+              <option value="local-simulation">Dry Run</option>
+              <option value="sepolia-broadcast">Broadcast to Sepolia</option>
+            </select>
+          </label>
           <button id="validate-btn">Validate + Preflight</button>
           <button id="compile-btn">Generate Files</button>
           <button id="simulate-btn">Simulate (Interactive)</button>
@@ -71,7 +61,9 @@
           <button id="add-edge">Add Edge</button>
         </div>
 
-        <div id="canvas" class="canvas"></div>
+        <div id="canvas" class="canvas">
+          <div id="node-inputs" class="node-inputs"></div>
+        </div>
 
         <div class="json-pane">
           <h3>Workflow IR JSON</h3>
