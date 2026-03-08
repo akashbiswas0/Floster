@@ -50,6 +50,12 @@ const IconNetwork = () => (
     <line x1="12" y1="8" x2="5" y2="16"/><line x1="12" y1="8" x2="19" y2="16"/>
   </svg>
 )
+const IconShield = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    <line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="15" r="1" fill="currentColor"/>
+  </svg>
+)
 
 interface PaletteEntry {
   type: string
@@ -65,12 +71,13 @@ const TRIGGERS: PaletteEntry[] = [
 ]
 
 const ACTIONS: PaletteEntry[] = [
-  { type: 'httpFetch',     label: 'HTTP Fetch',     icon: <IconDownload />, colorClass: 'bg-[rgba(0,212,255,0.12)] text-accent' },
-  { type: 'evmRead',       label: 'EVM Read',       icon: <IconEye />,      colorClass: 'bg-[rgba(124,106,255,0.15)] text-purple' },
-  { type: 'evmWrite',      label: 'EVM Write',      icon: <IconPencil />,   colorClass: 'bg-[rgba(124,106,255,0.15)] text-purple' },
-  { type: 'erc20Transfer', label: 'ERC20 Transfer', icon: <IconSend />,     colorClass: 'bg-[rgba(0,229,160,0.12)] text-success' },
-  { type: 'transform',     label: 'Transform',      icon: <IconShuffle />,  colorClass: 'bg-[rgba(255,181,71,0.12)] text-warning' },
-  { type: 'consensus',     label: 'Consensus',      icon: <IconNetwork />,  colorClass: 'bg-[rgba(255,181,71,0.12)] text-warning' },
+  { type: 'httpFetch',        label: 'HTTP Fetch',          icon: <IconDownload />, colorClass: 'bg-[rgba(0,212,255,0.12)] text-accent' },
+  { type: 'confidentialHttp', label: 'Confidential HTTP',  icon: <IconShield />,   colorClass: 'bg-[rgba(0,229,160,0.12)] text-success' },
+  { type: 'evmRead',          label: 'EVM Read',            icon: <IconEye />,      colorClass: 'bg-[rgba(124,106,255,0.15)] text-purple' },
+  { type: 'evmWrite',         label: 'EVM Write',           icon: <IconPencil />,   colorClass: 'bg-[rgba(124,106,255,0.15)] text-purple' },
+  { type: 'erc20Transfer',    label: 'ERC20 Transfer',      icon: <IconSend />,     colorClass: 'bg-[rgba(0,229,160,0.12)] text-success' },
+  { type: 'transform',        label: 'Transform',           icon: <IconShuffle />,  colorClass: 'bg-[rgba(255,181,71,0.12)] text-warning' },
+  { type: 'consensus',        label: 'Consensus',           icon: <IconNetwork />,  colorClass: 'bg-[rgba(255,181,71,0.12)] text-warning' },
 ]
 
 interface Props {
