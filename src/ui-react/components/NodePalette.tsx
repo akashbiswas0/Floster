@@ -102,11 +102,11 @@ function PaletteButton({ entry, onAddNode }: { entry: PaletteEntry; onAddNode: (
 export default function NodePalette({ onAddNode }: Props) {
   return (
     <section className="px-3 pt-3 pb-2">
-      <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-text-muted mb-2 px-1">Node Palette</p>
+      <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-purple bg-[rgba(124,106,255,0.12)] border border-[rgba(124,106,255,0.3)] inline-block px-2 py-1 rounded mb-2">Node Palette</p>
       <div className="flex flex-col gap-1">
-        <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-text-muted px-1 pt-1">Triggers</p>
+        <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-text-muted px-1 text-white pt-1">Triggers</p>
         {TRIGGERS.map((e) => <PaletteButton key={e.type} entry={e} onAddNode={onAddNode} />)}
-        <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-text-muted px-1 pt-2">Actions</p>
+        <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-text-muted px-1 text-white pt-2">Actions</p>
         {ACTIONS.map((e) => <PaletteButton key={e.type} entry={e} onAddNode={onAddNode} />)}
       </div>
     </section>
