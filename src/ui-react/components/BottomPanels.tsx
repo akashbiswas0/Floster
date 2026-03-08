@@ -6,15 +6,15 @@ interface Props {
   isSimulating: boolean
   simulationTarget: string
   onIRJsonChange: (v: string) => void
+  onClearOutput: () => void
 }
 
-export default function BottomPanels({ irJson, output, isSimulating, simulationTarget, onIRJsonChange }: Props) {
+export default function BottomPanels({ irJson, output, isSimulating, simulationTarget, onIRJsonChange, onClearOutput }: Props) {
   const [height, setHeight] = useState(220)
   const [irWidth, setIrWidth] = useState<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const irPanelRef = useRef<HTMLDivElement>(null)
 
-  // Horizontal resize (panel height)
   const handleHMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     const startY = e.clientY
@@ -30,7 +30,6 @@ export default function BottomPanels({ irJson, output, isSimulating, simulationT
     document.addEventListener('mouseup', onUp)
   }, [height])
 
-  // Vertical resize (column split)
   const handleVMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     const startX = e.clientX
@@ -58,18 +57,15 @@ export default function BottomPanels({ irJson, output, isSimulating, simulationT
 
   return (
     <>
-      {/* Horizontal resize handle */}
       <div onMouseDown={handleHMouseDown} className={resizeHCls}>
         <div className="w-8 h-0.5 bg-[rgba(255,255,255,0.1)] rounded" />
       </div>
 
-      {/* Bottom panels row */}
       <div
         ref={containerRef}
         className="flex-shrink-0 flex border-b border-[rgba(255,255,255,0.06)]"
         style={{ height }}
       >
-        {/* IR JSON panel */}
         <div
           ref={irPanelRef}
           className="flex flex-col bg-panel overflow-hidden border-b border-[rgba(255,255,255,0.12)]"
@@ -98,10 +94,8 @@ export default function BottomPanels({ irJson, output, isSimulating, simulationT
           />
         </div>
 
-        {/* Vertical resize handle */}
         <div onMouseDown={handleVMouseDown} className={resizeVCls} />
 
-        {/* Output panel */}
         <div className="flex-1 flex flex-col bg-panel overflow-hidden border-b border-[rgba(255,255,255,0.12)]" style={{ minWidth: 150 }}>
           <div className={panelHeaderCls}>
             <div className="flex items-center gap-2">
@@ -110,12 +104,20 @@ export default function BottomPanels({ irJson, output, isSimulating, simulationT
                 {simulationTarget === 'local-simulation' ? 'SIMULATION' : 'RUNNING ON TESTNET'}
               </span>
             </div>
-            <button
-              onClick={() => navigator.clipboard.writeText(output)}
-              className={copyBtnCls}
-            >
-              + copy
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigator.clipboard.writeText(output)}
+                className={copyBtnCls}
+              >
+                + copy
+              </button>
+              <button
+                onClick={onClearOutput}
+                className={copyBtnCls}
+              >
+                clear log
+              </button>
+            </div>
           </div>
           {isSimulating ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-3">

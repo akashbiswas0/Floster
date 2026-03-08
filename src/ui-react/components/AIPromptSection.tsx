@@ -72,7 +72,6 @@ export default function AIPromptSection({ aiPrompt, onAiPromptChange, onGenerate
           const data = trimmed.slice(5).trim()
 
           if (data === '[DONE]') {
-            // Stream complete — parse the accumulated JSON
             const cleaned = accumulated
               .replace(/^```(?:json)?\s*/i, '')
               .replace(/\s*```\s*$/, '')
@@ -95,7 +94,6 @@ export default function AIPromptSection({ aiPrompt, onAiPromptChange, onGenerate
             }
           } catch (parseErr) {
             if ((parseErr as Error).message.includes('AI returned')) throw parseErr
-            // Ignore other parse errors on individual SSE chunks
           }
         }
       }

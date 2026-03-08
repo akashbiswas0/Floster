@@ -18,7 +18,6 @@ export default function App() {
   const [isSimulating, setIsSimulating] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
 
-  // ── Derived ──────────────────────────────────────────────────────────────
   const simulationTarget = ir.runtime.defaultTarget || 'local-simulation'
   const nodes = allNodes(ir)
   const nodeIds = nodes.map((n) => n.id)
@@ -42,7 +41,6 @@ export default function App() {
       : 'Select a node and connect using Edge controls.'
   }
 
-  // ── Node add / drop ───────────────────────────────────────────────────────
   const handleAddNode = useCallback((type: string) => {
     setIr((prev) => {
       const count = allNodes(prev).length
@@ -77,7 +75,6 @@ export default function App() {
     })
   }, [])
 
-  // ── Field edit from NodeInputPanel ────────────────────────────────────────
   const handleFieldChange = useCallback((nodeId: string, key: string, value: string | number) => {
     setIr((prev) => {
       const next = structuredClone(prev)
@@ -88,7 +85,6 @@ export default function App() {
     })
   }, [])
 
-  // ── Simulation mode change ─────────────────────────────────────────────────
   function handleSimulationTargetChange(target: string) {
     setIr((prev) => {
       const next = structuredClone(prev)
@@ -102,19 +98,16 @@ export default function App() {
     })
   }
 
-  // ── Edge add (from canvas drag-connect) ──────────────────────────────────
   const handleAddEdge = useCallback((from: string, to: string, fromSide: 'left' | 'right', toSide: 'left' | 'right') => {
     if (!from || !to) return
     setIr((prev) => {
       const next = structuredClone(prev)
-      // Prevent duplicate edges on same ports
       if (next.edges.some((e) => e.from === from && e.to === to && (e.fromSide ?? 'right') === fromSide && (e.toSide ?? 'left') === toSide)) return prev
       next.edges.push({ from, to, fromSide, toSide })
       return next
     })
   }, [])
 
-  // ── Node delete ────────────────────────────────────────────────────────────
   const handleDeleteNode = useCallback((id: string) => {
     setIr((prev) => {
       const next = structuredClone(prev)
@@ -131,17 +124,14 @@ export default function App() {
     setSelectedNodeId((sel) => (sel === id ? null : sel))
   }, [])
 
-  // ── IR JSON textarea sync ─────────────────────────────────────────────────
   function handleIRJsonChange(value: string) {
     try {
       const parsed = normalizeLocalIR(JSON.parse(value))
       setIr(parsed)
     } catch {
-      // Don't crash on mid-edit parse failures — just ignore
     }
   }
 
-  // ── Connectivity guard ───────────────────────────────────────────────────
   function checkNodesConnected(): boolean {
     const totalNodes = ir.triggers.length + ir.actions.length
     if (totalNodes >= 2 && ir.edges.length === 0) {
@@ -151,7 +141,6 @@ export default function App() {
     return true
   }
 
-  // ── API actions ──────────────────────────────────────────────────────────
   async function handleValidate() {
     if (!checkNodesConnected()) return
     try {
@@ -177,7 +166,6 @@ export default function App() {
     if (!checkNodesConnected()) return
     setIsSimulating(false)
     try {
-      // Step 1: Validate
       let validatedIR = ir
       try {
         const validateRes = await postJSON<{ ir?: unknown; diagnostics?: unknown[] }>('/api/validate', ir)
@@ -196,7 +184,6 @@ export default function App() {
 
       await new Promise((r) => setTimeout(r, 1000))
 
-      // Step 2: Compile
       try {
         const compileRes = await postJSON('/api/compile', { ir: validatedIR })
         writeOutput('Step 2 · Generate Files', compileRes)
@@ -207,7 +194,6 @@ export default function App() {
 
       await new Promise((r) => setTimeout(r, 2000))
 
-      // Step 3: Simulate
       setIsSimulating(true)
       const meta = getSimulationMeta(validatedIR, simulationTarget)
       const res = await postJSON('/api/simulate', {
@@ -242,11 +228,9 @@ export default function App() {
     }
   }
 
-  // ── AI generation ─────────────────────────────────────────────────────────
   const handleGenerated = useCallback((generatedIR: WorkflowIR) => {
     const normalized = normalizeLocalIR(generatedIR)
     setIr(normalized)
-    // Auto-assign grid positions for each node in the generated IR
     const allGeneratedNodes = [
       ...(generatedIR.triggers ?? []),
       ...(generatedIR.actions ?? []),
@@ -327,6 +311,7 @@ export default function App() {
             isSimulating={isSimulating}
             simulationTarget={simulationTarget}
             onIRJsonChange={handleIRJsonChange}
+            onClearOutput={() => setOutput('')}
           />
         </div>
       </section>

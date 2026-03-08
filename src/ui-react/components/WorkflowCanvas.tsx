@@ -40,17 +40,13 @@ export default function WorkflowCanvas({
   const svgRef = useRef<SVGSVGElement>(null)
   const draggingRef = useRef<DraggingNodeState | null>(null)
   const pendingEdgeRef = useRef<PendingEdgeState | null>(null)
-  // Keep a mutable copy of positions for use during drag without re-renders
   const positionsRef = useRef<Map<string, NodePosition>>(nodePositions)
 
-  // Imperatively redraw SVG edges during drag (avoid React re-render on every mousemove)
   const redrawSVG = useCallback(() => {
     const svg = svgRef.current
     if (!svg) return
-    // Remove old paths/circles/defs
     while (svg.firstChild) svg.removeChild(svg.firstChild)
 
-    // Helper: get canvas-relative port center coords using live DOM measurements
     const getPortCoords = (nodeId: string, side: 'left' | 'right') => {
       const pos = positionsRef.current.get(nodeId)
       if (!pos) return null
@@ -62,7 +58,6 @@ export default function WorkflowCanvas({
         : { x: pos.x + w, y: pos.y + h / 2 }
     }
 
-    // Helper: build bezier path between two ports
     const makePath = (x1: number, y1: number, fromSide: string, x2: number, y2: number, toSide: string) => {
       const offset = Math.max(50, Math.abs(x2 - x1) * 0.45)
       const cx1 = fromSide === 'right' ? x1 + offset : x1 - offset
@@ -82,7 +77,6 @@ export default function WorkflowCanvas({
       const { x: x1, y: y1 } = from
       const { x: x2, y: y2 } = to
 
-      // Unique gradient per edge so each one glows correctly
       const gradId = `edgeGradient-${edgeIdx}`
       const grad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient')
       grad.setAttribute('id', gradId)
@@ -119,7 +113,6 @@ export default function WorkflowCanvas({
       }
     }
 
-    // Draw the in-progress "pending" edge while the user is dragging to connect
     const pe = pendingEdgeRef.current
     if (pe) {
       const dx = pe.mouseX - pe.x1
@@ -146,17 +139,13 @@ export default function WorkflowCanvas({
     }
   }, [ir.edges])
 
-  // Redraw edges (and sync positionsRef) whenever committed positions or edge topology changes.
-  // This replaces the old declarative EdgeSVGLayer rendering so there is only one owner of the SVG DOM.
   useEffect(() => {
     positionsRef.current = nodePositions
     redrawSVG()
   }, [nodePositions, redrawSVG])
 
-  // Document-level mouse handlers for node dragging and edge connecting
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
-      // Handle pending edge drag
       const pe = pendingEdgeRef.current
       if (pe) {
         const rect = canvasRef.current!.getBoundingClientRect()
@@ -166,7 +155,6 @@ export default function WorkflowCanvas({
         return
       }
 
-      // Handle node position drag
       const drag = draggingRef.current
       if (!drag) return
       const dx = e.clientX - drag.startClientX
@@ -176,7 +164,6 @@ export default function WorkflowCanvas({
       const newX = Math.max(0, drag.origX + dx)
       const newY = Math.max(0, drag.origY + dy)
       positionsRef.current.set(drag.id, { x: newX, y: newY })
-      // Move DOM node directly
       const nodeDiv = canvasRef.current?.querySelector<HTMLElement>(`[data-node-id="${drag.id}"]`)
       if (nodeDiv) {
         nodeDiv.style.left = `${newX}px`
@@ -188,7 +175,6 @@ export default function WorkflowCanvas({
     }
 
     const onMouseUp = (e: MouseEvent) => {
-      // Handle pending edge completion
       const pe = pendingEdgeRef.current
       if (pe) {
         pendingEdgeRef.current = null
@@ -196,12 +182,10 @@ export default function WorkflowCanvas({
         const nodeEl = (e.target as HTMLElement).closest<HTMLElement>('[data-node-id]')
         const targetId = nodeEl?.dataset.nodeId
         if (targetId && targetId !== pe.fromId) {
-          // Determine which port the user dropped on
           let toSide: 'left' | 'right'
           if (portEl?.dataset.portSide === 'left' || portEl?.dataset.portSide === 'right') {
             toSide = portEl.dataset.portSide as 'left' | 'right'
           } else {
-            // Infer side from mouse X position relative to node midpoint
             const targetDiv = canvasRef.current?.querySelector<HTMLElement>(`[data-node-id="${targetId}"]`)
             const targetPos = positionsRef.current.get(targetId)
             toSide = (targetDiv && targetPos)
@@ -214,7 +198,6 @@ export default function WorkflowCanvas({
         return
       }
 
-      // Handle node drag completion
       const drag = draggingRef.current
       if (!drag) return
       draggingRef.current = null
@@ -226,10 +209,8 @@ export default function WorkflowCanvas({
       if (!drag.moved) {
         onSelectNode(drag.id)
       } else {
-        // Commit new positions into React state once (triggers one re-render)
         onNodePositionsChange(new Map(positionsRef.current))
       }
-      // Restore transition after drag ends
       if (nodeDiv) nodeDiv.style.transition = ''
     }
 
@@ -248,7 +229,6 @@ export default function WorkflowCanvas({
         (e.target as HTMLElement).tagName === 'BUTTON') return
     e.preventDefault()
     const pos = positionsRef.current.get(nodeId) || { x: 0, y: 0 }
-    // Disable CSS transitions immediately so position follows cursor without easing
     const nodeDiv = canvasRef.current?.querySelector<HTMLElement>(`[data-node-id="${nodeId}"]`)
     if (nodeDiv) nodeDiv.style.transition = 'none'
     draggingRef.current = {
@@ -261,7 +241,6 @@ export default function WorkflowCanvas({
     }
   }
 
-  // Start drawing a connection line from a port of a node
   function handleConnectStart(e: React.MouseEvent, nodeId: string, side: 'left' | 'right') {
     if (e.button !== 0) return
     e.preventDefault()
@@ -313,7 +292,6 @@ export default function WorkflowCanvas({
   const nodes = allNodes(ir)
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) ?? null : null
 
-  // Compute a fallback position for nodes that don't have one yet
   function getPos(node: WorkflowNode, ti: number, ai: number): NodePosition {
     if (nodePositions.has(node.id)) return nodePositions.get(node.id)!
     const isTrigger = isTriggerType(node.type)
@@ -355,7 +333,6 @@ export default function WorkflowCanvas({
         backgroundSize: '20px 20px',
       }}
     >
-      {/* Ambient glow orbs */}
       <div className="pointer-events-none absolute top-[-60px] left-[-60px] w-[260px] h-[260px] rounded-full bg-accent opacity-[0.06] blur-[100px]" />
       <div className="pointer-events-none absolute top-[30%] right-[-40px] w-[320px] h-[320px] rounded-full bg-purple opacity-[0.07] blur-[100px]" />
 

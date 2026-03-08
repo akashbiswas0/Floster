@@ -42,7 +42,6 @@ export default function CanvasNode({ node, x, y, selected, onMouseDown, onDelete
       className={`absolute min-w-[180px] px-3 py-2.5 bg-surface border rounded-[10px] z-[2] cursor-grab select-none ${selectedRing}`}
       style={{ left: x, top: y }}
     >
-      {/* Delete button — top-right corner on hover */}
       {hovered && (
         <button
           onMouseDown={(e) => { e.stopPropagation(); e.preventDefault() }}
@@ -60,7 +59,6 @@ export default function CanvasNode({ node, x, y, selected, onMouseDown, onDelete
       <h4 className="m-0 mb-[3px] font-ui text-[13px] font-semibold text-text-primary">{node.name}</h4>
       <p className="m-0 font-mono text-[9px] text-text-muted break-all">{node.id} · {node.type}</p>
 
-      {/* Left connection port */}
       {hovered && (
         <div
           data-port-side="left"
@@ -70,7 +68,6 @@ export default function CanvasNode({ node, x, y, selected, onMouseDown, onDelete
         />
       )}
 
-      {/* Right connection port */}
       {hovered && (
         <div
           data-port-side="right"

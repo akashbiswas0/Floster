@@ -1,7 +1,5 @@
 import { forwardRef } from 'react'
 
-// This SVG is owned entirely by WorkflowCanvas.redrawSVG (imperative).
-// Do NOT render React children here — that would conflict with direct DOM manipulation.
 const EdgeSVGLayer = forwardRef<SVGSVGElement, object>((_props, ref) => (
   <svg
     ref={ref}

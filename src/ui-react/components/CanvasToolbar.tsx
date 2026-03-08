@@ -15,7 +15,6 @@ interface Props {
 export default function CanvasToolbar({ simulationTarget, modeLabel, modeDotColor, onSimulationTargetChange, onSimulate }: Props) {
   return (
     <div className="h-10 flex-shrink-0 bg-[rgba(255,255,255,0.015)] border-b border-[rgba(255,255,255,0.06)] flex items-center justify-between px-4">
-      {/* Mode status dot + label — left side */}
       <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-text-muted">
         <span
           className="w-1.5 h-1.5 rounded-full flex-shrink-0 animate-[pulse-opacity_2s_ease-in-out_infinite]"
@@ -24,7 +23,6 @@ export default function CanvasToolbar({ simulationTarget, modeLabel, modeDotColo
         {modeLabel}
       </span>
 
-      {/* Simulation target dropdown + Simulate button — right side */}
       <div className="flex items-center gap-2">
         <select
           value={simulationTarget}
