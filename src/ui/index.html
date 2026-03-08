@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CRE Local Visual Builder</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar">
+        <h1>CRE Builder</h1>
+        <p class="muted">Local simulation only</p>
+
+        <section class="panel">
+          <h2>Node Palette</h2>
+          <div class="palette-grid">
+            <button data-node="cron">+ Cron Trigger</button>
+            <button data-node="http">+ HTTP Trigger</button>
+            <button data-node="evmLog">+ EVM Log Trigger</button>
+            <button data-node="httpFetch">+ HTTP Fetch</button>
+            <button data-node="evmRead">+ EVM Read</button>
+            <button data-node="evmWrite">+ EVM Write</button>
+            <button data-node="transform">+ Transform</button>
+            <button data-node="consensus">+ Consensus</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>AI Prompt → IR</h2>
+          <textarea id="ai-prompt" rows="4" placeholder="Describe your workflow goal"></textarea>
+          <button id="generate-ai">Generate IR</button>
+        </section>
+
+        <section class="panel">
+          <h2>Actions</h2>
+          <button id="validate-btn">Validate + Preflight</button>
+          <button id="compile-btn">Generate Files</button>
+          <button id="simulate-btn">Simulate (Interactive)</button>
+          <button id="repair-btn">AI Repair IR</button>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <div class="canvas-header">
+          <h2>Workflow Canvas</h2>
+          <p id="selection">Select a node and connect using Edge controls.</p>
+        </div>
+
+        <div class="edge-controls">
+          <label>From <select id="edge-from"></select></label>
+          <label>To <select id="edge-to"></select></label>
+          <button id="add-edge">Add Edge</button>
+        </div>
+
+        <div id="canvas" class="canvas"></div>
+
+        <div class="json-pane">
+          <h3>Workflow IR JSON</h3>
+          <textarea id="ir-json" spellcheck="false"></textarea>
+        </div>
+
+        <div class="output-pane">
+          <h3>Output</h3>
+          <pre id="output"></pre>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/assets/app.js"></script>
+  </body>
+</html>
