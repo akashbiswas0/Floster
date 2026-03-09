@@ -4,7 +4,7 @@ Floster is a visual workflow automation platform that lets you build, simulate t
 
 ---
 
-**Key source links:**
+**Chainlink CRE Usage links:**
 - [Simulation engine](https://github.com/akashbiswas0/Floster/tree/main/src/simulation)
 - [Smart contracts](https://github.com/akashbiswas0/Floster/tree/main/contracts)
 - [Workflow compiler / code generator](https://github.com/akashbiswas0/Floster/blob/main/src/compiler/templates.ts)
