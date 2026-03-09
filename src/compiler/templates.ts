@@ -700,16 +700,18 @@ function runX402(node: any, runtime: Runtime<unknown>, ctx: WorkflowContext): un
     reqHeaders['Content-Type'] = 'application/json'
   }
 
-  runtime.log('x402: initial request -> ' + url)
+  if (bodyStr) runtime.log('x402: request body -> ' + bodyStr)
+  runtime.log('x402: [1/3] Probing ' + url + ' ...')
   const initRes = syncHttp(url, method, reqHeaders, bodyStr, runtime)
 
   if (initRes.status !== 402) {
+    runtime.log('x402: server did not return 402 (got ' + String(initRes.status) + ') — passing through')
     let body: unknown = initRes.text
     try { body = JSON.parse(initRes.text) } catch { /* keep as string */ }
     return { statusCode: initRes.status, body, paymentRequired: false }
   }
 
-  runtime.log('x402: 402 received, parsing payment requirement')
+  runtime.log('x402: [2/3] Got 402 — parsing payment requirement ...')
   const rawHdr = (initRes.headers['x-payment-required'] ?? initRes.headers['X-Payment-Required'] ?? [])[0]
   if (!rawHdr) throw new Error('x402: 402 response missing X-Payment-Required header')
   let paymentRequired: any
@@ -738,7 +740,8 @@ function runX402(node: any, runtime: Runtime<unknown>, ctx: WorkflowContext): un
   const validBefore = BigInt(Math.floor(Date.now() / 1000) + 300)
   const nonce = ('0x' + x402PureRandHex(32)) as \`0x\${string}\`
 
-  runtime.log('x402: signing ' + amount.toString() + ' base units to ' + payTo + ' (chain=' + chainId + ')')
+  const amountUsdc = (Number(amount) / 1e6).toFixed(6)
+  runtime.log('x402: paying ' + amountUsdc + ' USDC → ' + payTo.slice(0, 6) + '... (chain=' + chainId + ', wallet=' + account.address + ')')
 
   const domain: any = { name: 'USD Coin', version: '2', chainId, verifyingContract: tokenAddress }
   const types: any = {
@@ -782,7 +785,7 @@ function runX402(node: any, runtime: Runtime<unknown>, ctx: WorkflowContext): un
   }
 
   const xPaymentHeader = Buffer.from(JSON.stringify(paymentPayload)).toString('base64')
-  runtime.log('x402: payment signed, retrying with X-Payment header')
+  runtime.log('x402: [3/3] Payment signed — retrying request with X-Payment header ...')
 
   const finalRes = syncHttp(url, method, { ...reqHeaders, 'X-Payment': xPaymentHeader }, bodyStr, runtime)
 
@@ -793,6 +796,12 @@ function runX402(node: any, runtime: Runtime<unknown>, ctx: WorkflowContext): un
     try { settlement = JSON.parse(Buffer.from(settleRaw, 'base64').toString()) } catch { /* ignore */ }
   }
 
+  const txHash = (settlement as any)?.transaction ?? (settlement as any)?.txHash ?? null
+  if (txHash) {
+    runtime.log('x402: settlement txHash -> ' + String(txHash))
+    runtime.log('x402: view on explorer -> https://basescan.org/tx/' + String(txHash))
+  }
+
   let responseBody: unknown = finalRes.text
   try { responseBody = JSON.parse(finalRes.text) } catch { /* keep as string */ }
 
@@ -800,7 +809,10 @@ function runX402(node: any, runtime: Runtime<unknown>, ctx: WorkflowContext): un
     statusCode: finalRes.status,
     body: responseBody,
     paymentRequired: true,
-    amountPaid: amount.toString(),
+    amountPaidUsdc: amountUsdc,
+    walletAddress: account.address,
+    payTo,
+    txHash,
     settlement,
   }
 }

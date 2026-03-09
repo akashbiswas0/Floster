@@ -48,6 +48,26 @@ function normalizeLegacyAction(action: Record<string, unknown>, diagnostics: Dia
     return
   }
 
+  if (action.type === 'x402') {
+    // Wrap bare $outputs.* / $runtime.* / $trigger.* references in bodyTemplate with {{...}}
+    // so applyTemplate() can substitute them correctly at runtime
+    if (typeof action.bodyTemplate === 'string') {
+      const fixed = action.bodyTemplate.replace(
+        /(?<!\{)\$(?:outputs|runtime|trigger)\.[a-zA-Z0-9_.[\]]+(?!\})/g,
+        (match) => `{{${match}}}`,
+      )
+      if (fixed !== action.bodyTemplate) {
+        action.bodyTemplate = fixed
+        diagnostics.push({
+          severity: 'info',
+          code: 'IR_X402_BODY_TEMPLATE_REFS_WRAPPED',
+          message: 'Wrapped bare $outputs references in x402 bodyTemplate with {{ }} so they are interpolated correctly.',
+        })
+      }
+    }
+    return
+  }
+
   if (action.type !== 'evmPayoutTransfer') return
 
   action.type = 'erc20Transfer'
