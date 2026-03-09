@@ -16,6 +16,7 @@ export default function CanvasNode({ node, x, y, selected, onMouseDown, onDelete
   const [hovered, setHovered] = useState(false)
   const isTrigger = isTriggerType(node.type)
   const isErc20 = node.type === 'erc20Transfer'
+  const isX402 = node.type === 'x402'
   const typeLabel = isTrigger
     ? 'TRIGGER'
     : node.type.replace(/([A-Z])/g, ' $1').trim().toUpperCase()
@@ -24,6 +25,8 @@ export default function CanvasNode({ node, x, y, selected, onMouseDown, onDelete
     ? 'text-danger'
     : isErc20
     ? 'text-success'
+    : isX402
+    ? 'text-warning'
     : 'text-accent'
 
   const selectedRing = selected

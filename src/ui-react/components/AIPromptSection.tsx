@@ -114,7 +114,7 @@ export default function AIPromptSection({ aiPrompt, onAiPromptChange, onGenerate
   return (
     <section className="px-3 pt-2 pb-3 border-t border-[rgba(255,255,255,0.06)] mt-1">
       <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-purple mb-2 px-1 flex items-center gap-1">
-        <IconSparkle /> AI Prompt → workflow
+        <IconSparkle /> workflow maker agent
       </p>
 
       <textarea

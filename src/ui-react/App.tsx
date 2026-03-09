@@ -202,7 +202,9 @@ export default function App() {
         workflowPath: './generated/' + validatedIR.metadata.name,
         target: meta.target,
         broadcast: meta.broadcast,
-        triggerInput: { mode: 'cron', triggerIndex: 0 },
+        triggerInput: validatedIR.triggers[0]?.type === 'http'
+          ? { mode: 'http', triggerIndex: 0, payload: {} }
+          : { mode: 'cron', triggerIndex: 0 },
       })
       writeOutput('Step 3 · Simulation', formatSimulationResponse(res, meta))
     } catch (err) {

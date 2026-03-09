@@ -28,7 +28,7 @@ export default function SimulationControls({ onRepair }: Props) {
           onClick={onRepair}
           className="flex items-center gap-2 w-full bg-transparent border border-[rgba(124,106,255,0.25)] text-purple font-mono text-[11px] px-[10px] py-[7px] cursor-pointer transition-all duration-150 text-left hover:bg-[rgba(124,106,255,0.07)]"
         >
-          <IconSparkle /> AI Repair Workflow
+          <IconSparkle /> Repair Workflow Agent
         </button>
       </div>
     </section>

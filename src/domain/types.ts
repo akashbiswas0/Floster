@@ -11,6 +11,7 @@ export type ActionType =
   | 'erc20Transfer'
   | 'transform'
   | 'consensus'
+  | 'x402'
 
 export interface RPCConfig {
   chainName: string
@@ -120,6 +121,16 @@ export interface ConsensusActionNode extends BaseNode {
   fields?: Record<string, Exclude<ConsensusStrategy, 'fields'>>
 }
 
+export interface X402ActionNode extends BaseNode {
+  type: 'x402'
+  url: string
+  method: 'GET' | 'POST'
+  bodyTemplate?: string
+  walletKeyEnvVar: string
+  network: string
+  maxAmountUsd: number
+}
+
 export type ActionNode =
   | HttpFetchActionNode
   | ConfidentialHttpActionNode
@@ -128,6 +139,7 @@ export type ActionNode =
   | Erc20TransferActionNode
   | TransformActionNode
   | ConsensusActionNode
+  | X402ActionNode
 
 export interface Edge {
   from: string

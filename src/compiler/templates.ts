@@ -38,6 +38,10 @@ function buildPipelines(ir: WorkflowIR): Record<string, string[]> {
   return result
 }
 
+function hasX402Node(ir: WorkflowIR): boolean {
+  return ir.actions.some((a) => a.type === 'x402')
+}
+
 function generateMainTS(ir: WorkflowIR): string {
   const pipelines = buildPipelines(ir)
   const incomingMap = buildIncomingMap(ir.edges)
@@ -62,7 +66,9 @@ function generateMainTS(ir: WorkflowIR): string {
   type NodeRuntime,
   type Runtime,
 } from '@chainlink/cre-sdk'
-import { decodeFunctionResult, encodeFunctionData, parseUnits } from 'viem'
+import { decodeFunctionResult, encodeFunctionData, parseUnits${hasX402Node(ir) ? ', hashTypedData' : ''} } from 'viem'
+${hasX402Node(ir) ? "import { privateKeyToAccount } from 'viem/accounts'" : ''}
+${hasX402Node(ir) ? "import { secp256k1 } from '@noble/curves/secp256k1'" : ''}
 import { z } from 'zod'
 
 const IR = ${json(ir)} as const
@@ -659,6 +665,146 @@ function runTransform(node: any, runtime: Runtime<unknown>, ctx: WorkflowContext
   return output
 }
 
+function x402PureRandHex(bytes: number): string {
+  let hex = ''
+  for (let i = 0; i < bytes; i++) {
+    hex += Math.floor(Math.random() * 256).toString(16).padStart(2, '0')
+  }
+  return hex
+}
+
+function syncHttp(
+  url: string,
+  method: string,
+  headers: Record<string, string>,
+  body: string | undefined,
+  runtime: Runtime<unknown>,
+): { status: number; text: string; headers: Record<string, string[]> } {
+  const httpClient = new cre.capabilities.HTTPClient()
+  const req: { method: string; url: string; headers: Record<string, string>; body?: string } = { method, url, headers }
+  if (body !== undefined) req.body = Buffer.from(body, 'utf8').toString('base64')
+  const execute = (nodeRuntime: NodeRuntime<unknown>) => {
+    const res = httpClient.sendRequest(nodeRuntime, req).result()
+    return { status: res.statusCode, text: Buffer.from(res.body).toString('utf8'), headers: res.headers }
+  }
+  return runtime.runInNodeMode(execute, consensusIdenticalAggregation<unknown>())(null).result() as any
+}
+
+function runX402(node: any, runtime: Runtime<unknown>, ctx: WorkflowContext): unknown {
+  const url = applyTemplate(node.url, runtime, ctx)
+  const method = (node.method as string) || 'POST'
+  const reqHeaders: Record<string, string> = {}
+  let bodyStr: string | undefined
+  if (node.bodyTemplate) {
+    bodyStr = applyTemplate(node.bodyTemplate, runtime, ctx)
+    reqHeaders['Content-Type'] = 'application/json'
+  }
+
+  runtime.log('x402: initial request -> ' + url)
+  const initRes = syncHttp(url, method, reqHeaders, bodyStr, runtime)
+
+  if (initRes.status !== 402) {
+    let body: unknown = initRes.text
+    try { body = JSON.parse(initRes.text) } catch { /* keep as string */ }
+    return { statusCode: initRes.status, body, paymentRequired: false }
+  }
+
+  runtime.log('x402: 402 received, parsing payment requirement')
+  const rawHdr = (initRes.headers['x-payment-required'] ?? initRes.headers['X-Payment-Required'] ?? [])[0]
+  if (!rawHdr) throw new Error('x402: 402 response missing X-Payment-Required header')
+  let paymentRequired: any
+  try { paymentRequired = JSON.parse(rawHdr) } catch {
+    throw new Error('x402: could not parse X-Payment-Required header')
+  }
+
+  const accepts: any[] = Array.isArray(paymentRequired.accepts) ? paymentRequired.accepts : []
+  const payOption = accepts.find((o: any) => o.scheme === 'exact') ?? accepts[0]
+  if (!payOption) throw new Error('x402: no payment options in 402 response')
+
+  const walletKeyEnvVar = (node.walletKeyEnvVar as string) || 'AGENT_WALLET_PRIVATE_KEY'
+  // Support either an env var name ('AGENT_WALLET_PRIVATE_KEY') or a raw private key passed directly
+  const isRawKey = /^(0x)?[0-9a-fA-F]{64}$/.test(walletKeyEnvVar)
+  const rawKey = isRawKey ? walletKeyEnvVar : process.env[walletKeyEnvVar]
+  if (!rawKey) throw new Error('x402: env var ' + walletKeyEnvVar + ' not set')
+  const privateKey = (rawKey.startsWith('0x') ? rawKey : '0x' + rawKey) as \`0x\${string}\`
+
+  const account = privateKeyToAccount(privateKey)
+  const amount = BigInt(payOption.maxAmountRequired ?? '10000')
+  const networkId = String(payOption.networkId ?? '84532')
+  const chainId = parseInt(networkId, 10)
+  const payTo = String(payOption.payTo ?? payOption.extra?.receiver ?? payOption.extra?.payTo ?? '') as \`0x\${string}\`
+  const tokenAddress = String(payOption.asset ?? payOption.extra?.tokenAddress ?? '0x036CbD53842c5426634e7929541eC2318f3dCF7e') as \`0x\${string}\`
+  if (!payTo || !/^0x[a-fA-F0-9]{40}$/.test(payTo)) throw new Error('x402: invalid or missing payTo address: ' + payTo)
+  const validBefore = BigInt(Math.floor(Date.now() / 1000) + 300)
+  const nonce = ('0x' + x402PureRandHex(32)) as \`0x\${string}\`
+
+  runtime.log('x402: signing ' + amount.toString() + ' base units to ' + payTo + ' (chain=' + chainId + ')')
+
+  const domain: any = { name: 'USD Coin', version: '2', chainId, verifyingContract: tokenAddress }
+  const types: any = {
+    TransferWithAuthorization: [
+      { name: 'from', type: 'address' },
+      { name: 'to', type: 'address' },
+      { name: 'value', type: 'uint256' },
+      { name: 'validAfter', type: 'uint256' },
+      { name: 'validBefore', type: 'uint256' },
+      { name: 'nonce', type: 'bytes32' },
+    ],
+  }
+  const typedMessage: any = {
+    from: account.address,
+    to: payTo,
+    value: amount,
+    validAfter: 0n,
+    validBefore,
+    nonce,
+  }
+  // signTypedData resolves synchronously inside Javy (noble-secp256k1 is sync)
+  let signature = ''
+  void account.signTypedData({ domain, types, primaryType: 'TransferWithAuthorization', message: typedMessage }).then((s: string) => { signature = s })
+  if (!signature) throw new Error('x402: signTypedData did not resolve synchronously in this runtime')
+
+  const paymentPayload = {
+    x402Version: 1,
+    scheme: 'exact',
+    networkId,
+    payload: {
+      signature,
+      authorization: {
+        from: account.address,
+        to: payTo,
+        value: amount.toString(),
+        validAfter: '0',
+        validBefore: validBefore.toString(),
+        nonce,
+      },
+    },
+  }
+
+  const xPaymentHeader = Buffer.from(JSON.stringify(paymentPayload)).toString('base64')
+  runtime.log('x402: payment signed, retrying with X-Payment header')
+
+  const finalRes = syncHttp(url, method, { ...reqHeaders, 'X-Payment': xPaymentHeader }, bodyStr, runtime)
+
+  runtime.log('x402: final status ' + String(finalRes.status))
+  const settleRaw = (finalRes.headers['x-payment-response'] ?? finalRes.headers['X-Payment-Response'] ?? [])[0]
+  let settlement: unknown = null
+  if (settleRaw) {
+    try { settlement = JSON.parse(Buffer.from(settleRaw, 'base64').toString()) } catch { /* ignore */ }
+  }
+
+  let responseBody: unknown = finalRes.text
+  try { responseBody = JSON.parse(finalRes.text) } catch { /* keep as string */ }
+
+  return {
+    statusCode: finalRes.status,
+    body: responseBody,
+    paymentRequired: true,
+    amountPaid: amount.toString(),
+    settlement,
+  }
+}
+
 function runConsensus(node: any, inputs: unknown[]): unknown {
   if (node.strategy !== 'fields') {
     return aggregate(node.strategy, inputs)
@@ -701,6 +847,8 @@ function executeAction(
       return runTransform(node, runtime, ctx)
     case 'consensus':
       return runConsensus(node, input)
+    case 'x402':
+      return runX402(node, runtime, ctx)
     default:
       throw new Error('Unsupported node type: ' + node.type)
   }
@@ -966,7 +1114,7 @@ export function generateArtifacts(ir: WorkflowIR): GeneratedArtifacts {
     'project.yaml': generateProjectYAML(ir),
     'package.json': generatePackageJSON(),
     'tsconfig.json': generateTSConfig(),
-    '.env.example': 'CRE_ETH_PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000001\n',
+    '.env.example': 'CRE_ETH_PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000001\nAGENT_WALLET_PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000001\n',
   }
 
   for (const target of Object.keys(ir.runtime.targets)) {

@@ -46,7 +46,29 @@ export function formatSimulationResponse(
     summary.push('Dry run keeps the onchain write simulated. Choose Broadcast to Sepolia for a real transaction.')
   }
 
-  return `${summary.join('\n')}\n\n${JSON.stringify(response, null, 2)}`
+  const sim = r?.simulation as Record<string, unknown> | undefined
+  const exitCode = sim?.exitCode as number | undefined
+  const allLogs = sim?.logs as Array<{ level: string; line: string }> | undefined
+  const filteredLogs = (allLogs ?? [])
+    .filter((l) => {
+      if (l.line.includes('[USER LOG]')) return true
+      if (l.line.includes('[ERROR]') || l.line.includes('Error:') || l.line.includes('error:')) return true
+      // On failure, also show non-debug stderr so we can see what went wrong
+      if (exitCode !== 0 && l.level === 'stderr' && !l.line.startsWith('[debug]')) return true
+      return false
+    })
+    .map((l) => l.line)
+
+  const logsSection = filteredLogs.length > 0 ? `\nLogs:\n${filteredLogs.join('\n')}` : ''
+
+  const responseWithoutLogs = {
+    ...(r as object),
+    simulation: r?.simulation
+      ? { ...(r.simulation as object), logs: undefined }
+      : r?.simulation,
+  }
+
+  return `${summary.join('\n')}${logsSection}\n\n${JSON.stringify(responseWithoutLogs, null, 2)}`
 }
 
 export function getSimulationMeta(ir: WorkflowIR, target: string) {

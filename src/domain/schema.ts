@@ -200,6 +200,22 @@ const actionNode = {
       required: ['id', 'name', 'type', 'strategy'],
       additionalProperties: false,
     },
+    {
+      type: 'object',
+      properties: {
+        id: { type: 'string', minLength: 1 },
+        name: { type: 'string', minLength: 1 },
+        type: { const: 'x402' },
+        url: { type: 'string', minLength: 1 },
+        method: { enum: ['GET', 'POST'] },
+        bodyTemplate: { type: 'string', nullable: true },
+        walletKeyEnvVar: { type: 'string', minLength: 1 },
+        network: { type: 'string', minLength: 1 },
+        maxAmountUsd: { type: 'number', minimum: 0 },
+      },
+      required: ['id', 'name', 'type', 'url', 'method', 'walletKeyEnvVar', 'network', 'maxAmountUsd'],
+      additionalProperties: false,
+    },
   ],
 } as const
 

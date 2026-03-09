@@ -56,6 +56,12 @@ const IconShield = () => (
     <line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="15" r="1" fill="currentColor"/>
   </svg>
 )
+const IconCoin = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M12 7v1m0 8v1M9.5 9.5C9.5 8.1 10.6 7 12 7s2.5 1.1 2.5 2.5S13.4 12 12 12s-2.5 1.1-2.5 2.5S10.6 17 12 17s2.5-1.1 2.5-2.5"/>
+  </svg>
+)
 
 interface PaletteEntry {
   type: string
@@ -78,6 +84,7 @@ const ACTIONS: PaletteEntry[] = [
   { type: 'erc20Transfer',    label: 'ERC20 Transfer',      icon: <IconSend />,     colorClass: 'bg-[rgba(0,229,160,0.12)] text-success' },
   { type: 'transform',        label: 'Transform',           icon: <IconShuffle />,  colorClass: 'bg-[rgba(255,181,71,0.12)] text-warning' },
   { type: 'consensus',        label: 'Consensus',           icon: <IconNetwork />,  colorClass: 'bg-[rgba(255,181,71,0.12)] text-warning' },
+  { type: 'x402',             label: 'x402 Payment',        icon: <IconCoin />,     colorClass: 'bg-[rgba(255,181,71,0.15)] text-warning' },
 ]
 
 interface Props {

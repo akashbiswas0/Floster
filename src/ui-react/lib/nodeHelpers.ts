@@ -81,6 +81,16 @@ export function editableFieldsForNode(node: WorkflowNode): EditableField[] {
       { key: 'chainName', label: 'Chain Name', input: 'text' },
     ]
   }
+  if (node.type === 'x402') {
+    return [
+      { key: 'url', label: 'URL', input: 'text' },
+      { key: 'method', label: 'Method', input: 'select', options: ['GET', 'POST'] },
+      { key: 'bodyTemplate', label: 'Body (JSON)', input: 'text' },
+      { key: 'walletKeyEnvVar', label: 'Wallet Key Env Var', input: 'text' },
+      { key: 'network', label: 'Network', input: 'text' },
+      { key: 'maxAmountUsd', label: 'Max Amount (USD)', input: 'number' },
+    ]
+  }
   return []
 }
 
@@ -171,6 +181,19 @@ export function makeNode(
   }
   if (type === 'consensus') {
     return { id, name: 'Consensus', type: 'consensus', strategy: 'identical' }
+  }
+  if (type === 'x402') {
+    return {
+      id,
+      name: 'x402 Payment',
+      type: 'x402',
+      url: 'http://localhost:3000/alerts',
+      method: 'POST',
+      bodyTemplate: '{"asset":"ETH","condition":"gt","targetPriceUsd":3000}',
+      walletKeyEnvVar: 'AGENT_WALLET_PRIVATE_KEY',
+      network: 'base-sepolia',
+      maxAmountUsd: 0.01,
+    }
   }
   return { id, name: 'Transform', type: 'transform', template: { value: '$trigger' } }
 }
